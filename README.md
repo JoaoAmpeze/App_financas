@@ -52,7 +52,8 @@ A versão do app tem **um único lugar**: o campo `"version"` no **package.json*
 Sempre que for lançar uma nova versão:
 
 1. Altere o valor em `package.json` (ex.: `"1.0.0"` → `"1.1.0"`).
-2. Rode `npm run make`.
+2. Rode `npm run sync-version` — atualiza o `version.json` com a mesma versão (para a checagem de atualizações no GitHub).
+3. Rode `npm run make`.
 
 O instalador, o nome da pasta em `release/` e a versão exibida na barra do app (canto direito) passam a usar essa mesma versão automaticamente.
 

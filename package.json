@@ -9,6 +9,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "make": "npm run build && electron-builder --win",
+    "sync-version": "node scripts/sync-version.js",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
