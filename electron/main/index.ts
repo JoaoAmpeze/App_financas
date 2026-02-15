@@ -5,6 +5,9 @@ import { migrateIfNeeded } from './services/migrateToDataManager'
 
 const VERSION_CHECK_URL = 'https://raw.githubusercontent.com/JoaoAmpeze/App_financas/main/version.json'
 
+// Se os campos de digitação ainda não funcionarem no Windows após o build, descomente a linha abaixo:
+// app.disableHardwareAcceleration()
+
 let mainWindow: BrowserWindow | null = null
 let dataManager: DataManager
 
@@ -31,6 +34,7 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    focusable: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -48,6 +52,7 @@ function createWindow(): void {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show()
+    mainWindow?.focus()
   })
 
   mainWindow.on('closed', () => {
