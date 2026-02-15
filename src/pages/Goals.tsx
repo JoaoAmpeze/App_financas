@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useGoals } from '@/hooks/useFinanceData'
+import { useGoals, useSettings } from '@/hooks/useFinanceData'
 import type { Goal } from '../vite-env'
-import { Plus, Target } from 'lucide-react'
+import { Plus, Target, PiggyBank } from 'lucide-react'
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', {
@@ -14,15 +14,42 @@ function formatCurrency(value: number) {
   }).format(value)
 }
 
+function expectedCompletionDate(goal: Goal): string | null {
+  const remaining = goal.targetAmount - goal.currentAmount
+  if (remaining <= 0) return null
+  const history = goal.depositHistory ?? []
+  if (history.length === 0) return null
+  const totalDeposited = history.reduce((s, d) => s + d.amount, 0)
+  const firstDate = new Date(history[0].date)
+  const lastDate = new Date(history[history.length - 1].date)
+  const months = Math.max(0.1, (lastDate.getTime() - firstDate.getTime()) / (30 * 24 * 60 * 60 * 1000))
+  const monthlyRate = totalDeposited / months
+  if (monthlyRate <= 0) return null
+  const monthsLeft = remaining / monthlyRate
+  const d = new Date()
+  d.setMonth(d.getMonth() + Math.ceil(monthsLeft))
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+}
+
 export default function Goals() {
-  const { goals, loading, error, addGoal } = useGoals()
+  const { goals, loading, error, addGoal, depositToGoal } = useGoals()
+  const { settings } = useSettings()
   const [modalOpen, setModalOpen] = useState(false)
-  const [form, setForm] = useState<Omit<Goal, 'id'>>({
+  const [depositGoalId, setDepositGoalId] = useState<string | null>(null)
+  const [depositAmount, setDepositAmount] = useState('')
+  const [depositCreateExpense, setDepositCreateExpense] = useState(false)
+  const [form, setForm] = useState<Omit<Goal, 'id' | 'depositHistory'>>({
     name: '',
     targetAmount: 0,
     currentAmount: 0,
     deadline: new Date().toISOString().slice(0, 10)
   })
+
+  const savingsCategoryId = useMemo(() => {
+    const cats = settings?.categories ?? []
+    const cat = cats.find((c) => /poupança|economia|reserva|savings/i.test(c.name))
+    return cat?.id ?? cats[0]?.id
+  }, [settings?.categories])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -39,6 +66,17 @@ export default function Goals() {
       deadline: new Date().toISOString().slice(0, 10)
     })
     setModalOpen(false)
+  }
+
+  const handleDeposit = async () => {
+    if (!depositGoalId || !depositAmount || Number(depositAmount) <= 0) return
+    await depositToGoal(depositGoalId, Number(depositAmount), {
+      createExpenseTransaction: depositCreateExpense,
+      expenseCategoryId: depositCreateExpense ? savingsCategoryId : undefined
+    })
+    setDepositGoalId(null)
+    setDepositAmount('')
+    setDepositCreateExpense(false)
   }
 
   if (loading) {
@@ -59,7 +97,7 @@ export default function Goals() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Metas</h2>
-          <p className="text-muted-foreground">Acompanhe seus objetivos financeiros</p>
+          <p className="text-muted-foreground">Acompanhe e deposite para seus objetivos</p>
         </div>
         <Button onClick={() => setModalOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
@@ -83,6 +121,7 @@ export default function Goals() {
             const progress = goal.targetAmount > 0
               ? Math.min(100, (goal.currentAmount / goal.targetAmount) * 100)
               : 0
+            const expected = expectedCompletionDate(goal)
             return (
               <Card key={goal.id}>
                 <CardHeader className="pb-2">
@@ -95,7 +134,7 @@ export default function Goals() {
                     })}
                   </p>
                 </CardHeader>
-                <CardContent className="space-y-2">
+                <CardContent className="space-y-3">
                   <div className="flex justify-between text-sm">
                     <span>{formatCurrency(goal.currentAmount)}</span>
                     <span className="text-muted-foreground">{formatCurrency(goal.targetAmount)}</span>
@@ -107,6 +146,20 @@ export default function Goals() {
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">{progress.toFixed(0)}% concluído</p>
+                  {expected && (
+                    <p className="text-xs text-muted-foreground">
+                      Previsão de conclusão: {expected}
+                    </p>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => { setDepositGoalId(goal.id); setDepositAmount('') }}
+                  >
+                    <PiggyBank className="w-4 h-4 mr-2" />
+                    Depositar
+                  </Button>
                 </CardContent>
               </Card>
             )
@@ -180,6 +233,51 @@ export default function Goals() {
                 <Button type="submit">Salvar</Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {depositGoalId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setDepositGoalId(null)}
+        >
+          <div
+            className="bg-card border border-border rounded-lg shadow-lg w-full max-w-sm p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold mb-4">Depositar na meta</h3>
+            <div className="space-y-4">
+              <div>
+                <Label>Valor (R$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  placeholder="0,00"
+                  className="mt-1"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={depositCreateExpense}
+                  onChange={(e) => setDepositCreateExpense(e.target.checked)}
+                  className="rounded border-border"
+                />
+                Criar despesa no extrato (reflete saída para poupança)
+              </label>
+              <div className="flex gap-2 justify-end pt-2">
+                <Button type="button" variant="outline" onClick={() => setDepositGoalId(null)}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleDeposit} disabled={!depositAmount || Number(depositAmount) <= 0}>
+                  Depositar
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}

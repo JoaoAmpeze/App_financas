@@ -1,9 +1,22 @@
 /// <reference types="vite/client" />
 
-export interface Settings {
+export interface Category {
+  id: string
+  name: string
+  color: string
+  icon: string
+}
+
+export interface Tag {
+  id: string
+  name: string
+}
+
+export interface AppSettings {
   theme: 'light' | 'dark' | 'system'
-  categories: string[]
   monthlyBudgetLimit: number
+  categories: Category[]
+  tags: Tag[]
 }
 
 export interface Transaction {
@@ -12,7 +25,16 @@ export interface Transaction {
   description: string
   amount: number
   type: 'income' | 'expense'
-  category: string
+  categoryId: string
+  tagIds: string[]
+  recurring?: 'weekly' | 'monthly' | null
+  createdAt?: string
+}
+
+export interface GoalDeposit {
+  date: string
+  amount: number
+  transactionId?: string
 }
 
 export interface Goal {
@@ -21,6 +43,29 @@ export interface Goal {
   targetAmount: number
   currentAmount: number
   deadline: string
+  depositHistory: GoalDeposit[]
+}
+
+export interface FixedBill {
+  id: string
+  name: string
+  amount: number
+  type: 'income' | 'expense'
+  categoryId: string
+  dueDay: number
+  active: boolean
+  tagIds: string[]
+}
+
+export interface InstallmentDebt {
+  id: string
+  name: string
+  totalAmount: number
+  installments: number
+  firstDueMonth: string
+  dueDay: number
+  categoryId: string
+  tagIds: string[]
 }
 
 export interface CheckForUpdateResult {
@@ -34,15 +79,28 @@ declare global {
     electronAPI: {
       getVersion: () => Promise<string>
       checkForUpdate: () => Promise<CheckForUpdateResult>
-      getSettings: () => Promise<Settings>
-      saveSettings: (data: Settings) => Promise<void>
-      getTransactions: () => Promise<Transaction[]>
-      saveTransactions: (data: Transaction[]) => Promise<void>
+      getSettings: () => Promise<AppSettings>
+      saveSettings: (data: AppSettings) => Promise<void>
+      getTransactions: (month?: string) => Promise<Transaction[]>
+      getTransactionMonths: () => Promise<string[]>
       addTransaction: (data: Omit<Transaction, 'id'>) => Promise<Transaction>
+      updateTransaction: (id: string, updates: Partial<Transaction>) => Promise<Transaction | null>
+      updateTransactionsBulk: (ids: string[], updates: Partial<Pick<Transaction, 'categoryId' | 'tagIds'>>) => Promise<number>
+      deleteTransaction: (id: string) => Promise<boolean>
       getGoals: () => Promise<Goal[]>
-      saveGoals: (data: Goal[]) => Promise<void>
-      addGoal: (data: Omit<Goal, 'id'>) => Promise<Goal>
-      updateGoalProgress: (id: string, currentAmount: number) => Promise<void>
+      addGoal: (data: Omit<Goal, 'id' | 'depositHistory'>) => Promise<Goal>
+      updateGoal: (id: string, updates: Partial<Goal>) => Promise<Goal | null>
+      depositToGoal: (goalId: string, amount: number, options: { createExpenseTransaction?: boolean; expenseCategoryId?: string }) => Promise<{ goal: Goal; transaction?: Transaction } | null>
+      getFixedBills: () => Promise<FixedBill[]>
+      addFixedBill: (data: Omit<FixedBill, 'id'>) => Promise<FixedBill>
+      updateFixedBill: (id: string, updates: Partial<FixedBill>) => Promise<FixedBill | null>
+      deleteFixedBill: (id: string) => Promise<boolean>
+      getInstallmentDebts: () => Promise<InstallmentDebt[]>
+      addInstallmentDebt: (data: Omit<InstallmentDebt, 'id'>) => Promise<InstallmentDebt>
+      updateInstallmentDebt: (id: string, updates: Partial<InstallmentDebt>) => Promise<InstallmentDebt | null>
+      deleteInstallmentDebt: (id: string) => Promise<boolean>
+      getFutureBillsPaid: () => Promise<string[]>
+      setFutureBillsPaid: (ids: string[]) => Promise<void>
     }
   }
 }

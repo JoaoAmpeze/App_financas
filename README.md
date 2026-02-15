@@ -38,7 +38,7 @@ O ficheiro **`version.json`** na raiz do projeto deve ser commitado; o app vai b
 - **React 18** + **TypeScript** + **Vite**
 - **TailwindCSS** + componentes no estilo ShadcnUI
 - **Recharts** para gráficos
-- Armazenamento em arquivos JSON em `app.getPath('userData')/finance-data/`
+- **DataManager** com JSON em `app.getPath('userData')/finance-data/` (settings, goals, data/YYYY-MM.json)
 
 ## Scripts
 
@@ -71,18 +71,30 @@ O app pode exibir uma tela de **atualização obrigatória** e bloquear o uso at
 
 Se `VERSION_CHECK_URL` estiver vazia, a checagem é desativada (útil em desenvolvimento).
 
-## Estrutura de dados (JSON)
+## Arquitetura de dados (DataManager)
 
-- **settings.json** — categorias, tema, limite de orçamento mensal
-- **transactions.json** — lista de transações `{ id, date, description, amount, type, category }`
-- **goals.json** — metas `{ id, name, targetAmount, currentAmount, deadline }`
+Armazenamento **100% local** em `app.getPath('userData')/finance-data/`:
+
+- **settings.json** — categorias (nome, cor, ícone), tags, tema e orçamento mensal
+- **goals.json** — metas com histórico de depósitos (`depositHistory`)
+- **data/YYYY-MM.json** — transações por mês (`id`, `date`, `description`, `amount`, `type`, `categoryId`, `tagIds`, `recurring`)
+
+O **DataManager** (`electron/main/services/DataManager.ts`) centraliza leitura/escrita com `fs/promises`. Há migração automática dos ficheiros antigos (`transactions.json` / `goals.json`) para o novo formato.
 
 ## Funcionalidades
 
-- **Dashboard**: saldo atual, total de receitas/despesas, gráfico de linha do histórico do saldo
-- **Transações**: tabela e modal para adicionar receita/despesa
-- **Metas**: lista de metas com barra de progresso
+- **Configurações**: CRUD de categorias (cor + ícone) e tags; preferências (tema, orçamento)
+- **Dashboard**: KPIs (saldo, receitas/despesas do mês, saldo previsto); gráfico de linha (histórico); gráfico de pizza por categoria (clique filtra transações)
+- **Transações**: tabela com **@tanstack/react-table**; seleção múltipla (Shift+clique) e alteração em massa de categoria; modal com categoria e tags; filtro por categoria via URL (`?categoryId=`)
+- **Metas**: criação de metas; botão **Depositar** (aumenta valor e opcionalmente cria despesa no extrato); barra de progresso e previsão de data de conclusão
+- **Atalhos**: `Ctrl+N` (nova transação), `Ctrl+K` (paleta de comandos)
+
+## Próximos passos (opcional)
+
+- Importação **OFX/CSV** com modal de mapeamento de colunas
+- Transações **recorrentes** (mensal/semanal) com geração automática
+- Barra de título customizada (estilo Windows 11)
 
 ## IPC
 
-O frontend (React) usa `window.electronAPI` (exposto pelo `preload`) para ler/gravar dados. O processo principal (Node) usa a classe `FileSystemService` com `fs/promises` para acessar os JSON em disco de forma segura.
+O frontend usa `window.electronAPI` (preload). O processo principal expõe handlers `data:*` (getSettings, saveSettings, getTransactions, getTransactionMonths, addTransaction, updateTransaction, updateTransactionsBulk, deleteTransaction, getGoals, addGoal, updateGoal, depositToGoal).

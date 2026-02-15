@@ -1,6 +1,6 @@
 {
   "name": "app-financas",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "description": "Desktop Financial App - local only",
   "author": "",
   "main": "dist/main/index.js",
@@ -13,14 +13,16 @@
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.28.0",
-    "recharts": "^2.13.3",
+    "@tanstack/react-table": "^8.20.5",
+    "chart.js": "^4.5.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
-    "tailwind-merge": "^2.5.4",
-    "lucide-react": "^0.460.0"
+    "lucide-react": "^0.460.0",
+    "react": "^18.3.1",
+    "react-chartjs-2": "^5.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "tailwind-merge": "^2.5.4"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
@@ -48,7 +50,12 @@
     ],
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "artifactName": "${productName}-${version}-Setup.${ext}",
       "signAndEditExecutable": false
