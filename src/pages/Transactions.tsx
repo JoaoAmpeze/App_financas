@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { useTransactions, useSettings } from '@/hooks/useFinanceData'
-import type { Transaction } from '../vite-env.d'
+import type { Transaction } from '../vite-env'
 import { Plus } from 'lucide-react'
 
 function formatCurrency(value: number) {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Settings, Transaction, Goal } from '../vite-env.d'
+import type { Settings, Transaction, Goal } from '../vite-env'
 
 const api = typeof window !== 'undefined' ? window.electronAPI : null
 

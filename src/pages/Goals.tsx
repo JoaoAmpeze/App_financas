@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useGoals } from '@/hooks/useFinanceData'
-import type { Goal } from '../vite-env.d'
+import type { Goal } from '../vite-env'
 import { Plus, Target } from 'lucide-react'
 
 function formatCurrency(value: number) {

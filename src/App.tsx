@@ -4,7 +4,7 @@ import { LayoutDashboard, ListOrdered, Target, Download, AlertCircle } from 'luc
 import type { CheckForUpdateResult } from './vite-env'
 import Dashboard from './pages/Dashboard'
 import Transactions from './pages/Transactions'
-import Goals from './pages/Goals'
+import Goals from './pages/Goals.tsx'
 
 function UpdateRequiredScreen({ latestVersion, downloadUrl }: { latestVersion: string; downloadUrl?: string }) {
   return (
