@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import { DataManager } from './services/DataManager'
 import { migrateIfNeeded } from './services/migrateToDataManager'
@@ -80,6 +80,11 @@ app.on('activate', () => {
 
 function registerIpcHandlers(): void {
   ipcMain.handle('app:getVersion', () => app.getVersion())
+  ipcMain.handle('app:openExternalUrl', (_e, url: string) => {
+    if (typeof url === 'string' && url.startsWith('http')) {
+      shell.openExternal(url)
+    }
+  })
   ipcMain.handle('app:checkForUpdate', async () => {
     if (!VERSION_CHECK_URL) return { updateRequired: false }
     try {

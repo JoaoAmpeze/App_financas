@@ -76,6 +76,7 @@ export interface CheckForUpdateResult {
 
 const api = {
   getVersion: () => ipcRenderer.invoke('app:getVersion') as Promise<string>,
+  openExternalUrl: (url: string) => ipcRenderer.invoke('app:openExternalUrl', url) as Promise<void>,
   checkForUpdate: () => ipcRenderer.invoke('app:checkForUpdate') as Promise<CheckForUpdateResult>,
 
   getSettings: () => ipcRenderer.invoke('data:getSettings') as Promise<AppSettings>,

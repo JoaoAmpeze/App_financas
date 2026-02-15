@@ -39,22 +39,30 @@ function UpdateRequiredScreen({
   latestVersion: string
   downloadUrl?: string
 }) {
+  const handleDownload = () => {
+    if (downloadUrl) {
+      window.electronAPI?.openExternalUrl(downloadUrl)
+    }
+  }
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-8 text-center">
       <div className="max-w-md space-y-6">
         <h1 className="text-2xl font-bold text-foreground">Atualização obrigatória</h1>
         <p className="text-muted-foreground">
-          Instale a versão <strong className="text-foreground">v{latestVersion}</strong>.
+          Uma nova versão está disponível. Instale a versão <strong className="text-foreground">v{latestVersion}</strong> para continuar.
         </p>
-        {downloadUrl && (
-          <a
-            href={downloadUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
-          >
-            Baixar v{latestVersion}
-          </a>
+        <button
+          type="button"
+          onClick={handleDownload}
+          className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        >
+          {downloadUrl ? `Baixar v${latestVersion}` : 'Verificar atualização'}
+        </button>
+        {!downloadUrl && (
+          <p className="text-xs text-muted-foreground">
+            O download abrirá no navegador. Se não abrir, verifique o repositório do projeto.
+          </p>
         )}
       </div>
     </div>

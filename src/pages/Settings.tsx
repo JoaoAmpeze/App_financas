@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,7 +7,8 @@ import { Select } from '@/components/ui/select'
 import { useSettings } from '@/hooks/useFinanceData'
 import { CategoryIcon, CATEGORY_ICON_NAMES } from '@/lib/categoryIcons'
 import type { Category, Tag, AppSettings } from '../vite-env'
-import { Plus, Pencil, Trash2, Settings as SettingsIcon } from 'lucide-react'
+import { Plus, Pencil, Trash2, Settings as SettingsIcon, Download, Loader2 } from 'lucide-react'
+import type { CheckForUpdateResult } from '@/vite-env'
 
 function CategoryForm({
   category,
@@ -158,6 +159,32 @@ export default function Settings() {
     save({ ...settings, ...updates })
   }
 
+  const [currentVersion, setCurrentVersion] = useState<string>('')
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
+  const [updateResult, setUpdateResult] = useState<CheckForUpdateResult | null>(null)
+
+  useEffect(() => {
+    window.electronAPI?.getVersion().then(setCurrentVersion).catch(() => {})
+  }, [])
+
+  const handleCheckUpdate = () => {
+    setCheckingUpdate(true)
+    setUpdateResult(null)
+    window.electronAPI?.checkForUpdate().then((result) => {
+      setUpdateResult(result)
+    }).catch(() => {
+      setUpdateResult({ updateRequired: false })
+    }).finally(() => {
+      setCheckingUpdate(false)
+    })
+  }
+
+  const handleDownloadUpdate = () => {
+    if (updateResult?.downloadUrl) {
+      window.electronAPI?.openExternalUrl(updateResult.downloadUrl)
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -167,6 +194,50 @@ export default function Settings() {
         </h2>
         <p className="text-muted-foreground">Categorias, tags e preferências do app</p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Atualizações</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Versão instalada: {currentVersion || '…'}
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button
+            variant="outline"
+            onClick={handleCheckUpdate}
+            disabled={checkingUpdate}
+          >
+            {checkingUpdate ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Verificando…
+              </>
+            ) : (
+              'Verificar nova versão'
+            )}
+          </Button>
+          {updateResult && (
+            <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+              {updateResult.updateRequired && updateResult.latestVersion ? (
+                <>
+                  <p className="text-sm font-medium text-foreground">
+                    Nova versão disponível: v{updateResult.latestVersion}
+                  </p>
+                  <Button size="sm" onClick={handleDownloadUpdate}>
+                    <Download className="w-4 h-4 mr-2" />
+                    Baixar atualização
+                  </Button>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Você está na versão mais recente.
+                </p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
