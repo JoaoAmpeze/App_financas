@@ -90,8 +90,29 @@ export default function Transactions() {
   }, [categories])
 
   useEffect(() => {
-    if ((location.state as { openNewTransaction?: boolean })?.openNewTransaction) {
+    const state = location.state as {
+      openNewTransaction?: boolean
+      prefillFromFixedBill?: { description: string; amount: number; type: 'income' | 'expense'; categoryId: string; tagIds: string[]; dueDay: number }
+    }
+    if (state?.openNewTransaction) {
       setModalOpen(true)
+      if (state.prefillFromFixedBill) {
+        const p = state.prefillFromFixedBill
+        const now = new Date()
+        const y = now.getFullYear()
+        const m = now.getMonth() + 1
+        const lastDay = new Date(y, m, 0).getDate()
+        const day = Math.min(p.dueDay, lastDay)
+        const date = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+        setForm({
+          date,
+          description: p.description,
+          amount: p.amount,
+          type: p.type,
+          categoryId: p.categoryId,
+          tagIds: p.tagIds ?? []
+        })
+      }
       window.history.replaceState({}, '', location.pathname + location.search)
     }
   }, [location.state, location.pathname, location.search])

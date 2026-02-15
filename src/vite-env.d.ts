@@ -44,6 +44,7 @@ export interface Goal {
   currentAmount: number
   deadline: string
   depositHistory: GoalDeposit[]
+  completedAt?: string
 }
 
 export interface FixedBill {
@@ -79,7 +80,10 @@ declare global {
     electronAPI: {
       getVersion: () => Promise<string>
       openExternalUrl: (url: string) => Promise<void>
+      getDataFolderPath: () => Promise<string>
+      openDataFolder: () => Promise<void>
       checkForUpdate: () => Promise<CheckForUpdateResult>
+      resetAllData: () => Promise<void>
       getSettings: () => Promise<AppSettings>
       saveSettings: (data: AppSettings) => Promise<void>
       getTransactions: (month?: string) => Promise<Transaction[]>
@@ -92,6 +96,7 @@ declare global {
       addGoal: (data: Omit<Goal, 'id' | 'depositHistory'>) => Promise<Goal>
       updateGoal: (id: string, updates: Partial<Goal>) => Promise<Goal | null>
       depositToGoal: (goalId: string, amount: number, options: { createExpenseTransaction?: boolean; expenseCategoryId?: string }) => Promise<{ goal: Goal; transaction?: Transaction } | null>
+      markGoalAsPaid: (goalId: string, options: { createInvestmentTransaction?: boolean; investmentCategoryId?: string }) => Promise<{ goal: Goal; transaction?: Transaction } | null>
       getFixedBills: () => Promise<FixedBill[]>
       addFixedBill: (data: Omit<FixedBill, 'id'>) => Promise<FixedBill>
       updateFixedBill: (id: string, updates: Partial<FixedBill>) => Promise<FixedBill | null>

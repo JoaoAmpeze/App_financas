@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { useFixedBills, useSettings } from '@/hooks/useFinanceData'
 import type { FixedBill } from '../vite-env'
-import { Plus, Pencil, Trash2, Repeat } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Plus, Pencil, Trash2, Repeat, Receipt } from 'lucide-react'
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', {
@@ -18,6 +19,7 @@ function formatCurrency(value: number) {
 const DUE_DAYS = Array.from({ length: 31 }, (_, i) => i + 1)
 
 export default function FixedBills() {
+  const navigate = useNavigate()
   const { fixedBills, loading, error, addFixedBill, updateFixedBill, deleteFixedBill } = useFixedBills()
   const { settings } = useSettings()
   const categories = settings?.categories ?? []
@@ -195,6 +197,29 @@ export default function FixedBills() {
                         <td className="px-4 py-3">{bill.active ? 'Sim' : 'Não'}</td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex gap-1 justify-end">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              title="Registrar como transação (mês atual)"
+                              onClick={() =>
+                                navigate('/transactions', {
+                                  state: {
+                                    openNewTransaction: true,
+                                    prefillFromFixedBill: {
+                                      description: bill.name,
+                                      amount: bill.amount,
+                                      type: bill.type,
+                                      categoryId: bill.categoryId,
+                                      tagIds: bill.tagIds ?? [],
+                                      dueDay: bill.dueDay
+                                    }
+                                  }
+                                })
+                              }
+                            >
+                              <Receipt className="w-4 h-4" />
+                            </Button>
                             <Button
                               type="button"
                               size="sm"

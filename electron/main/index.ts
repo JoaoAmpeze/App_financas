@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron'
 import { join } from 'path'
 import { DataManager } from './services/DataManager'
 import { migrateIfNeeded } from './services/migrateToDataManager'
@@ -61,6 +61,9 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
+  // Remove a barra de menu (File, Edit, View, Window, Help)
+  Menu.setApplicationMenu(null)
+
   const dataPath = getDataPath()
   dataManager = new DataManager(dataPath)
   await dataManager.ensureDirs()
@@ -85,6 +88,11 @@ function registerIpcHandlers(): void {
       shell.openExternal(url)
     }
   })
+  ipcMain.handle('app:getDataFolderPath', () => getDataPath())
+  ipcMain.handle('app:openDataFolder', () => {
+    shell.openPath(getDataPath()).catch(() => {})
+  })
+
   ipcMain.handle('app:checkForUpdate', async () => {
     if (!VERSION_CHECK_URL) return { updateRequired: false }
     try {
@@ -115,6 +123,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('data:addGoal', (_e, data: Omit<Parameters<DataManager['addGoal']>[0], 'id'>) => dataManager.addGoal(data))
   ipcMain.handle('data:updateGoal', (_e, id: string, updates: Parameters<DataManager['updateGoal']>[1]) => dataManager.updateGoal(id, updates))
   ipcMain.handle('data:depositToGoal', (_e, goalId: string, amount: number, options: Parameters<DataManager['depositToGoal']>[2]) => dataManager.depositToGoal(goalId, amount, options))
+  ipcMain.handle('data:markGoalAsPaid', (_e, goalId: string, options: Parameters<DataManager['markGoalAsPaid']>[1]) => dataManager.markGoalAsPaid(goalId, options))
 
   ipcMain.handle('data:getFixedBills', () => dataManager.getFixedBills())
   ipcMain.handle('data:addFixedBill', (_e, data: Omit<Parameters<DataManager['addFixedBill']>[0], 'id'>) => dataManager.addFixedBill(data))
@@ -128,4 +137,6 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('data:getFutureBillsPaid', () => dataManager.getFutureBillsPaid())
   ipcMain.handle('data:setFutureBillsPaid', (_e, ids: string[]) => dataManager.setFutureBillsPaid(ids))
+
+  ipcMain.handle('data:resetAllData', () => dataManager.resetAllData())
 }

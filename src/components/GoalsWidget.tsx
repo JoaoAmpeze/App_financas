@@ -16,7 +16,7 @@ export default function GoalsWidget() {
   const { goals, loading, error } = useGoals()
 
   const activeGoals = (goals ?? []).filter(
-    (g) => g.currentAmount < g.targetAmount && g.targetAmount > 0
+    (g) => !g.completedAt && g.currentAmount < g.targetAmount && g.targetAmount > 0
   )
 
   if (loading) {

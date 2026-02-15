@@ -4,7 +4,7 @@ import * as LucideIcons from 'lucide-react'
 export const CATEGORY_ICON_NAMES = [
   'UtensilsCrossed', 'Car', 'Home', 'Heart', 'Gamepad2', 'Circle',
   'ShoppingCart', 'Plane', 'GraduationCap', 'Dumbbell', 'Music', 'Palette',
-  'Wallet', 'PiggyBank', 'Gift', 'Coffee', 'Briefcase', 'Building2'
+  'Wallet', 'PiggyBank', 'Gift', 'Coffee', 'Briefcase', 'Building2', 'TrendingUp'
 ] as const
 
 export type CategoryIconName = (typeof CATEGORY_ICON_NAMES)[number]
@@ -27,7 +27,8 @@ const iconMap: Record<string, LucideIcon> = {
   Gift: LucideIcons.Gift,
   Coffee: LucideIcons.Coffee,
   Briefcase: LucideIcons.Briefcase,
-  Building2: LucideIcons.Building2
+  Building2: LucideIcons.Building2,
+  TrendingUp: LucideIcons.TrendingUp
 }
 
 export function CategoryIcon({ icon, className, size = 18 }: { icon: string; className?: string; size?: number }) {

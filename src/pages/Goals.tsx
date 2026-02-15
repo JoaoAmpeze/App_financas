@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useGoals, useSettings } from '@/hooks/useFinanceData'
 import type { Goal } from '../vite-env'
-import { Plus, Target, PiggyBank } from 'lucide-react'
+import { Plus, Target, PiggyBank, CheckCircle } from 'lucide-react'
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', {
@@ -32,12 +32,11 @@ function expectedCompletionDate(goal: Goal): string | null {
 }
 
 export default function Goals() {
-  const { goals, loading, error, addGoal, depositToGoal } = useGoals()
+  const { goals, loading, error, addGoal, depositToGoal, markGoalAsPaid } = useGoals()
   const { settings } = useSettings()
   const [modalOpen, setModalOpen] = useState(false)
   const [depositGoalId, setDepositGoalId] = useState<string | null>(null)
   const [depositAmount, setDepositAmount] = useState('')
-  const [depositCreateExpense, setDepositCreateExpense] = useState(false)
   const [form, setForm] = useState<Omit<Goal, 'id' | 'depositHistory'>>({
     name: '',
     targetAmount: 0,
@@ -45,9 +44,9 @@ export default function Goals() {
     deadline: new Date().toISOString().slice(0, 10)
   })
 
-  const savingsCategoryId = useMemo(() => {
+  const investmentCategoryId = useMemo(() => {
     const cats = settings?.categories ?? []
-    const cat = cats.find((c) => /poupança|economia|reserva|savings/i.test(c.name))
+    const cat = cats.find((c) => /investimento|investment/i.test(c.name))
     return cat?.id ?? cats[0]?.id
   }, [settings?.categories])
 
@@ -71,12 +70,18 @@ export default function Goals() {
   const handleDeposit = async () => {
     if (!depositGoalId || !depositAmount || Number(depositAmount) <= 0) return
     await depositToGoal(depositGoalId, Number(depositAmount), {
-      createExpenseTransaction: depositCreateExpense,
-      expenseCategoryId: depositCreateExpense ? savingsCategoryId : undefined
+      createExpenseTransaction: true,
+      expenseCategoryId: investmentCategoryId
     })
     setDepositGoalId(null)
     setDepositAmount('')
-    setDepositCreateExpense(false)
+  }
+
+  const handleMarkAsPaid = async (goal: Goal) => {
+    await markGoalAsPaid(goal.id, {
+      createInvestmentTransaction: true,
+      investmentCategoryId
+    })
   }
 
   if (loading) {
@@ -122,10 +127,19 @@ export default function Goals() {
               ? Math.min(100, (goal.currentAmount / goal.targetAmount) * 100)
               : 0
             const expected = expectedCompletionDate(goal)
+            const isCompleted = !!goal.completedAt
             return (
-              <Card key={goal.id}>
+              <Card key={goal.id} className={isCompleted ? 'opacity-80' : ''}>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">{goal.name}</CardTitle>
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-base">{goal.name}</CardTitle>
+                    {isCompleted && (
+                      <span className="text-xs font-medium text-primary flex items-center gap-1">
+                        <CheckCircle className="w-4 h-4" />
+                        Concluída
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-muted-foreground">
                     Prazo: {new Date(goal.deadline).toLocaleDateString('pt-BR', {
                       day: '2-digit',
@@ -146,20 +160,41 @@ export default function Goals() {
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">{progress.toFixed(0)}% concluído</p>
-                  {expected && (
+                  {expected && !isCompleted && (
                     <p className="text-xs text-muted-foreground">
                       Previsão de conclusão: {expected}
                     </p>
                   )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => { setDepositGoalId(goal.id); setDepositAmount('') }}
-                  >
-                    <PiggyBank className="w-4 h-4 mr-2" />
-                    Depositar
-                  </Button>
+                  {!isCompleted && (
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => { setDepositGoalId(goal.id); setDepositAmount('') }}
+                      >
+                        <PiggyBank className="w-4 h-4 mr-2" />
+                        Depositar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="w-full"
+                        onClick={() => handleMarkAsPaid(goal)}
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Marcar como paga
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        O valor da meta será registrado como despesa na categoria Investimento.
+                      </p>
+                    </div>
+                  )}
+                  {isCompleted && (
+                    <p className="text-xs text-muted-foreground">
+                      O valor {formatCurrency(goal.currentAmount)} foi registrado como investimento.
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             )
@@ -260,15 +295,9 @@ export default function Goals() {
                   className="mt-1"
                 />
               </div>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={depositCreateExpense}
-                  onChange={(e) => setDepositCreateExpense(e.target.checked)}
-                  className="rounded border-border"
-                />
-                Criar despesa no extrato (reflete saída para poupança)
-              </label>
+              <p className="text-sm text-muted-foreground">
+                O valor será registrado como investimento e descontado do seu saldo.
+              </p>
               <div className="flex gap-2 justify-end pt-2">
                 <Button type="button" variant="outline" onClick={() => setDepositGoalId(null)}>
                   Cancelar

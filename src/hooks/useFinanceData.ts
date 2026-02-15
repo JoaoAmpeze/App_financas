@@ -131,11 +131,18 @@ export function useGoals() {
     return result
   }, [])
 
+  const markGoalAsPaid = useCallback(async (goalId: string, options?: { createInvestmentTransaction?: boolean; investmentCategoryId?: string }) => {
+    if (!api) return null
+    const result = await api.markGoalAsPaid(goalId, options ?? {})
+    if (result) setGoals((prev) => prev.map((g) => (g.id === goalId ? result.goal : g)))
+    return result
+  }, [])
+
   useEffect(() => {
     load()
   }, [load])
 
-  return { goals, loading, error, refresh: load, addGoal, updateGoal, depositToGoal }
+  return { goals, loading, error, refresh: load, addGoal, updateGoal, depositToGoal, markGoalAsPaid }
 }
 
 export function useFixedBills() {

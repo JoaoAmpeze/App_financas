@@ -7,7 +7,7 @@ import { Select } from '@/components/ui/select'
 import { useSettings } from '@/hooks/useFinanceData'
 import { CategoryIcon, CATEGORY_ICON_NAMES } from '@/lib/categoryIcons'
 import type { Category, Tag, AppSettings } from '../vite-env'
-import { Plus, Pencil, Trash2, Settings as SettingsIcon, Download, Loader2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Settings as SettingsIcon, Download, Loader2, FolderOpen, RotateCcw } from 'lucide-react'
 import type { CheckForUpdateResult } from '@/vite-env'
 
 function CategoryForm({
@@ -155,16 +155,22 @@ export default function Settings() {
     save({ ...settings, tags: settings.tags.filter((x) => x.id !== id) })
   }
 
-  const handlePreferencesChange = (updates: Partial<Pick<AppSettings, 'theme' | 'monthlyBudgetLimit'>>) => {
+  const handlePreferencesChange = (updates: Partial<Pick<AppSettings, 'theme'>>) => {
     save({ ...settings, ...updates })
   }
 
   const [currentVersion, setCurrentVersion] = useState<string>('')
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [updateResult, setUpdateResult] = useState<CheckForUpdateResult | null>(null)
+  const [dataFolderPath, setDataFolderPath] = useState<string>('')
+  const [resetting, setResetting] = useState(false)
 
   useEffect(() => {
     window.electronAPI?.getVersion().then(setCurrentVersion).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    window.electronAPI?.getDataFolderPath().then(setDataFolderPath).catch(() => {})
   }, [])
 
   const handleCheckUpdate = () => {
@@ -183,6 +189,20 @@ export default function Settings() {
     if (updateResult?.downloadUrl) {
       window.electronAPI?.openExternalUrl(updateResult.downloadUrl)
     }
+  }
+
+  const handleOpenDataFolder = () => {
+    window.electronAPI?.openDataFolder()
+  }
+
+  const handleResetData = () => {
+    if (!window.confirm('Tem certeza que deseja resetar todos os dados? Transações, metas, contas fixas e configurações serão apagados. Esta ação não pode ser desfeita.')) return
+    setResetting(true)
+    window.electronAPI?.resetAllData().then(() => {
+      window.location.reload()
+    }).catch(() => {
+      setResetting(false)
+    })
   }
 
   return (
@@ -239,10 +259,57 @@ export default function Settings() {
         </CardContent>
       </Card>
 
+      {window.electronAPI && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Backup e dados</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Pasta onde os dados do app são salvos. Você pode copiá-la para fazer backup.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label className="text-muted-foreground text-sm">Pasta dos dados</Label>
+              <p className="mt-1 font-mono text-sm bg-muted/50 rounded px-2 py-1.5 break-all">
+                {dataFolderPath || '…'}
+              </p>
+              <Button variant="outline" size="sm" className="mt-2" onClick={handleOpenDataFolder}>
+                <FolderOpen className="w-4 h-4 mr-2" />
+                Abrir pasta (fazer backup)
+              </Button>
+            </div>
+            <div className="pt-2 border-t border-border">
+              <Label className="text-muted-foreground text-sm">Resetar dados</Label>
+              <p className="mt-1 text-sm text-muted-foreground mb-2">
+                Apaga todas as transações, metas, contas fixas e restaura as configurações padrão.
+              </p>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleResetData}
+                disabled={resetting}
+              >
+                {resetting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Resetando…
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Resetar todos os dados
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Preferências</CardTitle>
-          <p className="text-sm text-muted-foreground">Tema e orçamento mensal padrão</p>
+          <p className="text-sm text-muted-foreground">Tema de exibição</p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
@@ -256,17 +323,6 @@ export default function Settings() {
               <option value="dark">Escuro</option>
               <option value="system">Sistema</option>
             </Select>
-          </div>
-          <div>
-            <Label>Orçamento mensal (R$)</Label>
-            <Input
-              type="number"
-              min={0}
-              step={100}
-              value={settings.monthlyBudgetLimit}
-              onChange={(e) => handlePreferencesChange({ monthlyBudgetLimit: Number(e.target.value) || 0 })}
-              className="mt-1 max-w-xs"
-            />
           </div>
         </CardContent>
       </Card>

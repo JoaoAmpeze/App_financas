@@ -75,7 +75,7 @@ Se `VERSION_CHECK_URL` estiver vazia, a checagem é desativada (útil em desenvo
 
 Armazenamento **100% local** em `app.getPath('userData')/finance-data/`:
 
-- **settings.json** — categorias (nome, cor, ícone), tags, tema e orçamento mensal
+- **settings.json** — categorias (nome, cor, ícone), tags e tema
 - **goals.json** — metas com histórico de depósitos (`depositHistory`)
 - **data/YYYY-MM.json** — transações por mês (`id`, `date`, `description`, `amount`, `type`, `categoryId`, `tagIds`, `recurring`)
 
@@ -83,7 +83,7 @@ O **DataManager** (`electron/main/services/DataManager.ts`) centraliza leitura/e
 
 ## Funcionalidades
 
-- **Configurações**: CRUD de categorias (cor + ícone) e tags; preferências (tema, orçamento)
+- **Configurações**: CRUD de categorias (cor + ícone) e tags; preferências (tema)
 - **Dashboard**: KPIs (saldo, receitas/despesas do mês, saldo previsto); gráfico de linha (histórico); gráfico de pizza por categoria (clique filtra transações)
 - **Transações**: tabela com **@tanstack/react-table**; seleção múltipla (Shift+clique) e alteração em massa de categoria; modal com categoria e tags; filtro por categoria via URL (`?categoryId=`)
 - **Metas**: criação de metas; botão **Depositar** (aumenta valor e opcionalmente cria despesa no extrato); barra de progresso e previsão de data de conclusão

@@ -4,8 +4,12 @@ import {
   useTransactions,
   useTransactionMonths,
   useSettings,
+  useFixedBills,
+  useInstallmentDebts,
 } from '@/hooks/useFinanceData'
-import { ChevronDown } from 'lucide-react'
+import type { InstallmentDebt } from '@/vite-env'
+import { Calendar } from 'lucide-react'
+import { Select } from '@/components/ui/select'
 import CashFlowAreaChart from '@/components/charts/CashFlowAreaChart'
 import ExpensesDoughnutChart from '@/components/charts/ExpensesDoughnutChart'
 import { CategoryIcon } from '@/lib/categoryIcons'
@@ -13,14 +17,55 @@ import { cn } from '@/lib/utils'
 
 const MONTH_NAMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-function getLast5MonthKeys(): string[] {
+/** Adiciona N meses a YYYY-MM */
+function addMonths(ym: string, n: number): string {
+  const [y, m] = ym.split('-').map(Number)
+  let month = m + n
+  let year = y
+  while (month > 12) {
+    month -= 12
+    year += 1
+  }
+  while (month < 1) {
+    month += 12
+    year -= 1
+  }
+  return `${year}-${String(month).padStart(2, '0')}`
+}
+
+/** Valor total de parcelas vencendo em um mês e por categoria */
+function getInstallmentAmountForMonth(
+  installmentDebts: InstallmentDebt[],
+  monthKey: string
+): { total: number; byCategory: Record<string, number> } {
+  const byCategory: Record<string, number> = {}
+  let total = 0
+  for (const debt of installmentDebts) {
+    for (let i = 0; i < debt.installments; i++) {
+      const dueMonth = addMonths(debt.firstDueMonth, i)
+      if (dueMonth === monthKey) {
+        const amount = debt.totalAmount / debt.installments
+        total += amount
+        byCategory[debt.categoryId] = (byCategory[debt.categoryId] ?? 0) + amount
+        break
+      }
+    }
+  }
+  return { total, byCategory }
+}
+
+/** Retorna os últimos `count` meses terminando no mês dado (inclusive). Ex: 2025-02, 5 → [2024-10, 2024-11, 2024-12, 2025-01, 2025-02] */
+function getMonthKeysEndingAt(endMonthKey: string, count = 5): string[] {
+  const [y, m] = endMonthKey.split('-').map(Number)
   const keys: string[] = []
-  const now = new Date()
-  for (let i = 4; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    keys.push(`${y}-${m}`)
+  for (let i = count - 1; i >= 0; i--) {
+    let month = m - i
+    let year = y
+    while (month < 1) {
+      month += 12
+      year -= 1
+    }
+    keys.push(`${year}-${String(month).padStart(2, '0')}`)
   }
   return keys
 }
@@ -50,12 +95,36 @@ function formatTimeAgo(dateStr: string): string {
   return `${diffYears} anos atrás`
 }
 
+function formatMonthOption(monthKey: string): string {
+  const [y, m] = monthKey.split('-')
+  const monthNum = parseInt(m, 10)
+  const name = MONTH_NAMES[monthNum - 1] ?? m
+  return `${name}/${y}`
+}
+
+function formatDayMonth(dateStr: string): string {
+  const [, m, d] = dateStr.split('-')
+  const monthNum = parseInt(m, 10)
+  const name = MONTH_NAMES[monthNum - 1] ?? m
+  return `${d}/${name}`
+}
+
+function sourceLabel(source: 'transaction' | 'fixed' | 'installment'): string {
+  return source === 'transaction' ? 'Transação' : source === 'fixed' ? 'Conta fixa' : 'Parcela'
+}
+
+type DetailModalType = 'receitas' | 'despesas' | null
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
-  const { transactions, loading, error } = useTransactions(selectedMonth ?? undefined)
+  const [historyEndMonthKey, setHistoryEndMonthKey] = useState<string | null>(null)
+  const [detailModal, setDetailModal] = useState<DetailModalType>(null)
+  const { transactions, loading, error } = useTransactions()
   const { months: monthKeys } = useTransactionMonths()
   const { settings } = useSettings()
+  const { fixedBills } = useFixedBills()
+  const { installmentDebts } = useInstallmentDebts()
 
   const now = new Date()
   const currentMonthKey =
@@ -72,8 +141,94 @@ export default function Dashboard() {
     return Array.from(set).sort().reverse()
   }, [monthKeys, currentMonthKey])
 
+  const historyEndKey = historyEndMonthKey ?? currentMonthKey
+  const historyMonthOptions = useMemo(() => {
+    const set = new Set(monthKeys)
+    if (!set.has(historyEndKey)) set.add(historyEndKey)
+    return Array.from(set).sort().reverse()
+  }, [monthKeys, historyEndKey])
+
+  /** Itens detalhados de receita/despesa do mês para os modais */
+  const { monthIncomeDetails, monthExpenseDetails } = useMemo(() => {
+    const categories = settings?.categories ?? []
+    const activeFixed = fixedBills.filter((b) => b.active)
+    const installmentCurrent = getInstallmentAmountForMonth(installmentDebts, currentMonthKey)
+
+    const incomeDetails: { id: string; date: string; description: string; categoryName: string; amount: number; source: 'transaction' | 'fixed' }[] = []
+    for (const t of transactions) {
+      if (t.type !== 'income' || !t.date.startsWith(currentMonthKey)) continue
+      const cat = categories.find((c) => c.id === t.categoryId)
+      incomeDetails.push({
+        id: `tx-${t.id}`,
+        date: t.date,
+        description: t.description,
+        categoryName: cat?.name ?? t.categoryId,
+        amount: t.amount,
+        source: 'transaction',
+      })
+    }
+    for (const b of activeFixed.filter((b) => b.type === 'income')) {
+      const cat = categories.find((c) => c.id === b.categoryId)
+      incomeDetails.push({
+        id: `fixed-${b.id}`,
+        date: `${currentMonthKey}-${String(b.dueDay).padStart(2, '0')}`,
+        description: b.name,
+        categoryName: cat?.name ?? b.categoryId,
+        amount: b.amount,
+        source: 'fixed',
+      })
+    }
+    incomeDetails.sort((a, b) => a.date.localeCompare(b.date))
+
+    const expenseDetails: { id: string; date: string; description: string; categoryName: string; amount: number; source: 'transaction' | 'fixed' | 'installment' }[] = []
+    for (const t of transactions) {
+      if (t.type !== 'expense' || !t.date.startsWith(currentMonthKey)) continue
+      const cat = categories.find((c) => c.id === t.categoryId)
+      expenseDetails.push({
+        id: `tx-${t.id}`,
+        date: t.date,
+        description: t.description,
+        categoryName: cat?.name ?? t.categoryId,
+        amount: t.amount,
+        source: 'transaction',
+      })
+    }
+    for (const b of activeFixed.filter((b) => b.type === 'expense')) {
+      const cat = categories.find((c) => c.id === b.categoryId)
+      expenseDetails.push({
+        id: `fixed-${b.id}`,
+        date: `${currentMonthKey}-${String(b.dueDay).padStart(2, '0')}`,
+        description: b.name,
+        categoryName: cat?.name ?? b.categoryId,
+        amount: b.amount,
+        source: 'fixed',
+      })
+    }
+    for (const debt of installmentDebts) {
+      for (let i = 0; i < debt.installments; i++) {
+        const dueMonth = addMonths(debt.firstDueMonth, i)
+        if (dueMonth !== currentMonthKey) continue
+        const cat = categories.find((c) => c.id === debt.categoryId)
+        const amount = debt.totalAmount / debt.installments
+        expenseDetails.push({
+          id: `inst-${debt.id}-${i}`,
+          date: `${currentMonthKey}-${String(debt.dueDay).padStart(2, '0')}`,
+          description: `${debt.name} (${i + 1}/${debt.installments})`,
+          categoryName: cat?.name ?? debt.categoryId,
+          amount,
+          source: 'installment',
+        })
+        break
+      }
+    }
+    expenseDetails.sort((a, b) => a.date.localeCompare(b.date))
+
+    return { monthIncomeDetails: incomeDetails, monthExpenseDetails: expenseDetails }
+  }, [transactions, settings?.categories, currentMonthKey, fixedBills, installmentDebts])
+
   const {
-    balance,
+    balanceReal,
+    balanceProjetado,
     monthIncome,
     monthExpense,
     pieData,
@@ -82,6 +237,16 @@ export default function Dashboard() {
     trendPercent,
     savingsRate,
   } = useMemo(() => {
+    const activeFixed = fixedBills.filter((b) => b.active)
+    const fixedIncomePerMonth = activeFixed
+      .filter((b) => b.type === 'income')
+      .reduce((s, b) => s + b.amount, 0)
+    const fixedExpensePerMonth = activeFixed
+      .filter((b) => b.type === 'expense')
+      .reduce((s, b) => s + b.amount, 0)
+
+    const installmentCurrent = getInstallmentAmountForMonth(installmentDebts, currentMonthKey)
+
     let income = 0
     let expense = 0
     let monthIn = 0
@@ -100,6 +265,16 @@ export default function Dashboard() {
         byCategory[t.categoryId] = (byCategory[t.categoryId] ?? 0) + t.amount
       }
     }
+    monthIn += fixedIncomePerMonth
+    monthOut += fixedExpensePerMonth
+    monthOut += installmentCurrent.total
+    for (const b of activeFixed.filter((x) => x.type === 'expense')) {
+      byCategory[b.categoryId] = (byCategory[b.categoryId] ?? 0) + b.amount
+    }
+    for (const [catId, val] of Object.entries(installmentCurrent.byCategory)) {
+      byCategory[catId] = (byCategory[catId] ?? 0) + val
+    }
+
     const categories = settings?.categories ?? []
     const pieData = Object.entries(byCategory)
       .map(([categoryId, value]) => {
@@ -108,7 +283,7 @@ export default function Dashboard() {
       })
       .filter((d) => d.value > 0)
 
-    const monthKeys5 = getLast5MonthKeys()
+    const monthKeys5 = getMonthKeysEndingAt(historyEndKey)
     const cashFlowAreaData = monthKeys5.map((monthKey) => {
       let receita = 0
       let despesa = 0
@@ -117,6 +292,10 @@ export default function Dashboard() {
         if (t.type === 'income') receita += t.amount
         else despesa += t.amount
       }
+      receita += fixedIncomePerMonth
+      despesa += fixedExpensePerMonth
+      const inst = getInstallmentAmountForMonth(installmentDebts, monthKey)
+      despesa += inst.total
       const [, m] = monthKey.split('-')
       const monthNum = parseInt(m, 10)
       const label = MONTH_NAMES[monthNum - 1] ?? m
@@ -132,13 +311,14 @@ export default function Dashboard() {
       }
     })
 
-    const balance = income - expense
-    const balanceChangeThisMonth = monthIn - monthOut
-    const startOfMonthBalance = balance - balanceChangeThisMonth
+    const balanceReal = income - expense
+    const balanceProjetado = balanceReal + fixedIncomePerMonth - fixedExpensePerMonth - installmentCurrent.total
+    const monthChangeTransactionsOnly = (monthIn - fixedIncomePerMonth - installmentCurrent.total) - (monthOut - fixedExpensePerMonth - installmentCurrent.total)
+    const startOfMonthBalance = balanceReal - monthChangeTransactionsOnly
     const trendPercent =
       startOfMonthBalance !== 0
         ? (
-            (balanceChangeThisMonth / Math.abs(startOfMonthBalance)) *
+            (monthChangeTransactionsOnly / Math.abs(startOfMonthBalance)) *
             100
           ).toFixed(1)
         : null
@@ -146,7 +326,8 @@ export default function Dashboard() {
       monthIn > 0 ? Math.round(((monthIn - monthOut) / monthIn) * 100) : 0
 
     return {
-      balance,
+      balanceReal,
+      balanceProjetado,
       monthIncome: monthIn,
       monthExpense: monthOut,
       pieData,
@@ -155,7 +336,7 @@ export default function Dashboard() {
       trendPercent,
       savingsRate,
     }
-  }, [transactions, settings?.categories, currentMonthKey, now])
+  }, [transactions, settings?.categories, currentMonthKey, historyEndKey, now, fixedBills, installmentDebts])
 
   const handlePieClick = (categoryId: string | null) => {
     if (categoryId) navigate(`/transactions?categoryId=${categoryId}`)
@@ -178,6 +359,39 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Seletores de mês */}
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-muted-foreground" />
+          <span className="text-sm font-medium text-muted-foreground">Mês em foco (projeção):</span>
+          <Select
+            value={currentMonthKey}
+            onChange={(e) => setSelectedMonth(e.target.value || null)}
+            className="w-[140px] h-9"
+          >
+            {filterMonthOptions.map((key) => (
+              <option key={key} value={key}>
+                {formatMonthOption(key)}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-muted-foreground">Histórico até:</span>
+          <Select
+            value={historyEndKey}
+            onChange={(e) => setHistoryEndMonthKey(e.target.value || null)}
+            className="w-[140px] h-9"
+          >
+            {historyMonthOptions.map((key) => (
+              <option key={key} value={key}>
+                {formatMonthOption(key)}
+              </option>
+            ))}
+          </Select>
+        </div>
+      </div>
+
       {/* Total Balance + Spending by Category row */}
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
         <div
@@ -185,14 +399,20 @@ export default function Dashboard() {
         >
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Saldo total</p>
+              <p className="text-sm font-medium text-muted-foreground">Saldo projetado (fim do mês)</p>
               <p
                 className={cn(
                   'text-3xl font-bold mt-1',
-                  balance >= 0 ? 'text-foreground' : 'text-destructive'
+                  balanceProjetado >= 0 ? 'text-foreground' : 'text-destructive'
                 )}
               >
-                {formatCurrency(balance)}
+                {formatCurrency(balanceProjetado)}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Inclui transações + contas fixas + parcelas do mês
+              </p>
+              <p className="text-sm text-muted-foreground mt-2">
+                Saldo atual (só transações): {formatCurrency(balanceReal)}
               </p>
               {trendPercent !== null && (
                 <p
@@ -201,17 +421,10 @@ export default function Dashboard() {
                     Number(trendPercent) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'
                   )}
                 >
-                  {Number(trendPercent) >= 0 ? '↑' : '↓'} {Math.abs(Number(trendPercent))}% este mês
+                  {Number(trendPercent) >= 0 ? '↑' : '↓'} {Math.abs(Number(trendPercent))}% este mês (transações)
                 </p>
               )}
             </div>
-            <button
-              type="button"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-accent text-foreground text-sm font-medium"
-            >
-              Tendência
-              <ChevronDown className="w-4 h-4" />
-            </button>
           </div>
         </div>
 
@@ -257,8 +470,12 @@ export default function Dashboard() {
 
       {/* Income, Expenses, Savings Rate */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <p className="text-sm font-medium text-muted-foreground">Receita ({currentMonthLabel})</p>
+        <button
+          type="button"
+          onClick={() => setDetailModal('receitas')}
+          className="rounded-2xl border border-border bg-card p-5 text-left hover:bg-accent/50 transition-colors cursor-pointer"
+        >
+          <p className="text-sm font-medium text-muted-foreground">Receita ({currentMonthLabel}){fixedBills.some(b => b.active && b.type === 'income') ? ' · incl. contas fixas' : ''}</p>
           <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
             {formatCurrency(monthIncome)}
           </p>
@@ -270,9 +487,14 @@ export default function Dashboard() {
               }}
             />
           </div>
-        </div>
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <p className="text-sm font-medium text-muted-foreground">Despesas ({currentMonthLabel})</p>
+          <p className="text-xs text-muted-foreground mt-2">Clique para ver detalhes</p>
+        </button>
+        <button
+          type="button"
+          onClick={() => setDetailModal('despesas')}
+          className="rounded-2xl border border-border bg-card p-5 text-left hover:bg-accent/50 transition-colors cursor-pointer"
+        >
+          <p className="text-sm font-medium text-muted-foreground">Despesas ({currentMonthLabel}){(fixedBills.some(b => b.active && b.type === 'expense') || installmentDebts.length > 0) ? ' · incl. contas fixas e parcelas' : ''}</p>
           <p className="text-2xl font-bold text-destructive mt-1">
             {formatCurrency(monthExpense)}
           </p>
@@ -284,7 +506,8 @@ export default function Dashboard() {
               }}
             />
           </div>
-        </div>
+          <p className="text-xs text-muted-foreground mt-2">Clique para ver detalhes</p>
+        </button>
         <div className="rounded-2xl border border-border bg-card p-5">
           <p className="text-sm font-medium text-muted-foreground">Taxa de poupança</p>
           <p className="text-2xl font-bold text-primary mt-1">{savingsRate}%</p>
@@ -346,6 +569,142 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Modal detalhamento Receitas */}
+      {detailModal === 'receitas' && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setDetailModal(null)}
+        >
+          <div
+            className="bg-card border border-border rounded-xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
+              <h3 className="text-lg font-semibold">
+                Receitas – {currentMonthLabel} {currentMonthKey.split('-')[0]}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setDetailModal(null)}
+                className="text-muted-foreground hover:text-foreground p-1 rounded"
+                aria-label="Fechar"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4">
+              {monthIncomeDetails.length === 0 ? (
+                <p className="text-muted-foreground text-sm py-4">Nenhuma receita neste mês.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-muted-foreground">
+                      <th className="pb-2 pr-2 font-medium">Data</th>
+                      <th className="pb-2 pr-2 font-medium">Descrição</th>
+                      <th className="pb-2 pr-2 font-medium">Categoria</th>
+                      <th className="pb-2 pr-2 font-medium text-center w-20">Origem</th>
+                      <th className="pb-2 text-right font-medium">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthIncomeDetails.map((item) => (
+                      <tr key={item.id} className="border-b border-border/60">
+                        <td className="py-2.5 pr-2">{formatDayMonth(item.date)}</td>
+                        <td className="py-2.5 pr-2 font-medium">{item.description}</td>
+                        <td className="py-2.5 pr-2 text-muted-foreground">{item.categoryName}</td>
+                        <td className="py-2.5 pr-2 text-center">
+                          <span className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                            {sourceLabel(item.source)}
+                          </span>
+                        </td>
+                        <td className="py-2.5 text-right font-semibold text-emerald-600 dark:text-emerald-400">
+                          +{formatCurrency(item.amount)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            {monthIncomeDetails.length > 0 && (
+              <div className="p-4 border-t border-border bg-muted/30 shrink-0 flex justify-end">
+                <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">
+                  Total: {formatCurrency(monthIncomeDetails.reduce((s, i) => s + i.amount, 0))}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal detalhamento Despesas */}
+      {detailModal === 'despesas' && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setDetailModal(null)}
+        >
+          <div
+            className="bg-card border border-border rounded-xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
+              <h3 className="text-lg font-semibold">
+                Despesas – {currentMonthLabel} {currentMonthKey.split('-')[0]}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setDetailModal(null)}
+                className="text-muted-foreground hover:text-foreground p-1 rounded"
+                aria-label="Fechar"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4">
+              {monthExpenseDetails.length === 0 ? (
+                <p className="text-muted-foreground text-sm py-4">Nenhuma despesa neste mês.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-muted-foreground">
+                      <th className="pb-2 pr-2 font-medium">Data</th>
+                      <th className="pb-2 pr-2 font-medium">Descrição</th>
+                      <th className="pb-2 pr-2 font-medium">Categoria</th>
+                      <th className="pb-2 pr-2 font-medium text-center w-20">Origem</th>
+                      <th className="pb-2 text-right font-medium">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthExpenseDetails.map((item) => (
+                      <tr key={item.id} className="border-b border-border/60">
+                        <td className="py-2.5 pr-2">{formatDayMonth(item.date)}</td>
+                        <td className="py-2.5 pr-2 font-medium">{item.description}</td>
+                        <td className="py-2.5 pr-2 text-muted-foreground">{item.categoryName}</td>
+                        <td className="py-2.5 pr-2 text-center">
+                          <span className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                            {sourceLabel(item.source)}
+                          </span>
+                        </td>
+                        <td className="py-2.5 text-right font-semibold text-destructive">
+                          -{formatCurrency(item.amount)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            {monthExpenseDetails.length > 0 && (
+              <div className="p-4 border-t border-border bg-muted/30 shrink-0 flex justify-end">
+                <span className="text-base font-bold text-destructive">
+                  Total: {formatCurrency(monthExpenseDetails.reduce((s, i) => s + i.amount, 0))}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile, readdir } from 'fs/promises'
+import { mkdir, readFile, writeFile, readdir, unlink } from 'fs/promises'
 import { join } from 'path'
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -47,6 +47,7 @@ export interface Goal {
   currentAmount: number
   deadline: string
   depositHistory: GoalDeposit[]
+  completedAt?: string
 }
 
 export interface FixedBill {
@@ -83,7 +84,8 @@ const DEFAULT_SETTINGS: AppSettings = {
     { id: 'cat-3', name: 'Moradia', color: '#8b5cf6', icon: 'Home' },
     { id: 'cat-4', name: 'Saúde', color: '#ef4444', icon: 'Heart' },
     { id: 'cat-5', name: 'Lazer', color: '#eab308', icon: 'Gamepad2' },
-    { id: 'cat-6', name: 'Outros', color: '#64748b', icon: 'Circle' }
+    { id: 'cat-6', name: 'Investimento', color: '#059669', icon: 'TrendingUp' },
+    { id: 'cat-7', name: 'Outros', color: '#64748b', icon: 'Circle' }
   ],
   tags: []
 }
@@ -290,6 +292,35 @@ export class DataManager {
     return { goal, transaction }
   }
 
+  async markGoalAsPaid(
+    goalId: string,
+    options: { createInvestmentTransaction?: boolean; investmentCategoryId?: string }
+  ): Promise<{ goal: Goal; transaction?: Transaction } | null> {
+    const list = await this.getGoals()
+    const idx = list.findIndex((g) => g.id === goalId)
+    if (idx === -1) return null
+    const goal = list[idx]
+    if (goal.completedAt) return null
+
+    const amount = goal.currentAmount ?? 0
+    let transaction: Transaction | undefined
+    if (options.createInvestmentTransaction && options.investmentCategoryId && amount > 0) {
+      transaction = await this.addTransaction({
+        date: new Date().toISOString().slice(0, 10),
+        description: `Meta paga: ${goal.name}`,
+        amount,
+        type: 'expense',
+        categoryId: options.investmentCategoryId,
+        tagIds: []
+      })
+    }
+
+    goal.completedAt = new Date().toISOString()
+    list[idx] = goal
+    await this.saveGoals(list)
+    return { goal, transaction }
+  }
+
   // ─── Fixed bills (contas fixas) ───────────────────────────────────────────
 
   async getFixedBills(): Promise<FixedBill[]> {
@@ -375,5 +406,20 @@ export class DataManager {
   async setFutureBillsPaid(ids: string[]): Promise<void> {
     await this.ensureDirs()
     await this.writeJson(this.futureBillsPaidPath, ids)
+  }
+
+  /** Apaga todos os dados e restaura configurações padrão. */
+  async resetAllData(): Promise<void> {
+    await this.ensureDirs()
+    await this.writeJson(this.settingsPath, DEFAULT_SETTINGS)
+    await this.writeJson(this.goalsPath, [])
+    await this.writeJson(this.fixedBillsPath, [])
+    await this.writeJson(this.installmentDebtsPath, [])
+    await this.writeJson(this.futureBillsPaidPath, [])
+    const files = await readdir(this.dataDir).catch(() => [])
+    const monthFiles = files.filter((f) => /^\d{4}-\d{2}\.json$/.test(f))
+    for (const f of monthFiles) {
+      await unlink(join(this.dataDir, f)).catch(() => {})
+    }
   }
 }

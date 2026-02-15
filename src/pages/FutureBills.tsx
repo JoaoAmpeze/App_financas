@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
-import { useFixedBills, useInstallmentDebts, useSettings, useFutureBillsPaid } from '@/hooks/useFinanceData'
+import { useFixedBills, useInstallmentDebts, useSettings, useFutureBillsPaid, useTransactions } from '@/hooks/useFinanceData'
 import type { FixedBill, InstallmentDebt } from '../vite-env'
 import { Plus, CalendarClock, Trash2, CreditCard, Repeat, ChevronRight, Check } from 'lucide-react'
 
@@ -161,6 +161,7 @@ export default function FutureBills() {
   const { installmentDebts, loading: loadingDebts, addInstallmentDebt, deleteInstallmentDebt } = useInstallmentDebts()
   const { settings } = useSettings()
   const { paidIds, togglePaid } = useFutureBillsPaid()
+  const { addTransaction } = useTransactions()
   const categories = settings?.categories ?? []
 
   const [modalAddOpen, setModalAddOpen] = useState(false)
@@ -249,6 +250,28 @@ export default function FutureBills() {
       await deleteInstallmentDebt(id)
       setDetailGroup(null)
     }
+  }
+
+  const handleMarkAsPaid = async (item: FutureBillItem) => {
+    const isPaid = paidIds.includes(item.id)
+    if (!isPaid) {
+      const [y, m] = item.monthKey.split('-').map(Number)
+      const lastDay = new Date(y, m, 0).getDate()
+      const day = Math.min(item.dueDay, lastDay)
+      const date = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+      const description = item.installmentLabel
+        ? `${item.name} (${item.installmentLabel})`
+        : item.name
+      await addTransaction({
+        date,
+        description,
+        amount: item.amount,
+        type: 'expense',
+        categoryId: item.categoryId,
+        tagIds: []
+      })
+    }
+    await togglePaid(item.id)
   }
 
   const loading = loadingFixed || loadingDebts
@@ -564,7 +587,7 @@ export default function FutureBills() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => togglePaid(item.id)}
+                        onClick={() => handleMarkAsPaid(item)}
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors shrink-0 ${
                           isPaid
                             ? 'bg-primary text-primary-foreground'

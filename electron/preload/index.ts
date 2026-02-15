@@ -44,6 +44,7 @@ export interface Goal {
   currentAmount: number
   deadline: string
   depositHistory: GoalDeposit[]
+  completedAt?: string
 }
 
 export interface FixedBill {
@@ -77,7 +78,10 @@ export interface CheckForUpdateResult {
 const api = {
   getVersion: () => ipcRenderer.invoke('app:getVersion') as Promise<string>,
   openExternalUrl: (url: string) => ipcRenderer.invoke('app:openExternalUrl', url) as Promise<void>,
+  getDataFolderPath: () => ipcRenderer.invoke('app:getDataFolderPath') as Promise<string>,
+  openDataFolder: () => ipcRenderer.invoke('app:openDataFolder') as Promise<void>,
   checkForUpdate: () => ipcRenderer.invoke('app:checkForUpdate') as Promise<CheckForUpdateResult>,
+  resetAllData: () => ipcRenderer.invoke('data:resetAllData') as Promise<void>,
 
   getSettings: () => ipcRenderer.invoke('data:getSettings') as Promise<AppSettings>,
   saveSettings: (data: AppSettings) => ipcRenderer.invoke('data:saveSettings', data),
@@ -94,6 +98,8 @@ const api = {
   updateGoal: (id: string, updates: Partial<Goal>) => ipcRenderer.invoke('data:updateGoal', id, updates) as Promise<Goal | null>,
   depositToGoal: (goalId: string, amount: number, options: { createExpenseTransaction?: boolean; expenseCategoryId?: string }) =>
     ipcRenderer.invoke('data:depositToGoal', goalId, amount, options) as Promise<{ goal: Goal; transaction?: Transaction } | null>,
+  markGoalAsPaid: (goalId: string, options: { createInvestmentTransaction?: boolean; investmentCategoryId?: string }) =>
+    ipcRenderer.invoke('data:markGoalAsPaid', goalId, options) as Promise<{ goal: Goal; transaction?: Transaction } | null>,
 
   getFixedBills: () => ipcRenderer.invoke('data:getFixedBills') as Promise<FixedBill[]>,
   addFixedBill: (data: Omit<FixedBill, 'id'>) => ipcRenderer.invoke('data:addFixedBill', data) as Promise<FixedBill>,
