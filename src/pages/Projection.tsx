@@ -66,7 +66,9 @@ function buildMonthProjections(
   for (let i = 0; i < monthsAhead; i++) {
     const monthKey = addMonths(startKey, i)
     const monthItems = byMonth.get(monthKey) ?? []
-    const totalExpenses = monthItems.reduce((s, it) => s + it.amount, 0)
+    const totalExpenses = monthItems
+      .filter((it) => it.transactionType === 'expense')
+      .reduce((s, it) => s + it.amount, 0)
     const totalIncome = activeFixedIncome.reduce((s, b) => s + b.amount, 0)
     result.push({
       monthKey,
@@ -224,51 +226,91 @@ export default function Projection() {
                   <ArrowUpCircle className="w-4 h-4 text-destructive" />
                   Saídas (contas fixas e parcelas)
                 </h4>
-                {selectedMonth.items.length === 0 ? (
+                {selectedMonth.items.filter((i) => i.transactionType === 'expense').length === 0 ? (
                   <p className="text-sm text-muted-foreground">Nenhuma despesa prevista neste mês.</p>
                 ) : (
                   <ul className="space-y-2">
-                    {selectedMonth.items.map((item) => {
-                      const cat = categories.find((c) => c.id === item.categoryId)
-                      return (
-                        <li
-                          key={item.id}
-                          className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg bg-muted/40 border border-border/50"
-                        >
-                          <span className="flex items-center gap-2 min-w-0">
-                            {item.type === 'fixed' ? (
-                              <Repeat className="w-4 h-4 text-muted-foreground shrink-0" />
-                            ) : (
-                              <CreditCard className="w-4 h-4 text-muted-foreground shrink-0" />
-                            )}
-                            <span className="truncate">{item.name}</span>
-                            {item.installmentLabel && (
-                              <span className="text-muted-foreground text-xs shrink-0">
-                                ({item.installmentLabel})
-                              </span>
-                            )}
-                            {cat && (
-                              <span
-                                className="inline-block w-2 h-2 rounded-full shrink-0"
-                                style={{ backgroundColor: cat.color }}
-                                title={cat.name}
-                              />
-                            )}
-                          </span>
-                          <span className="text-destructive font-semibold tabular-nums shrink-0">
-                            -{formatCurrency(item.amount)}
-                          </span>
-                        </li>
-                      )
-                    })}
+                    {selectedMonth.items
+                      .filter((item) => item.transactionType === 'expense')
+                      .map((item) => {
+                        const cat = categories.find((c) => c.id === item.categoryId)
+                        return (
+                          <li
+                            key={item.id}
+                            className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg bg-muted/40 border border-border/50"
+                          >
+                            <span className="flex items-center gap-2 min-w-0">
+                              {item.type === 'fixed' ? (
+                                <Repeat className="w-4 h-4 text-muted-foreground shrink-0" />
+                              ) : (
+                                <CreditCard className="w-4 h-4 text-muted-foreground shrink-0" />
+                              )}
+                              <span className="truncate">{item.name}</span>
+                              {item.installmentLabel && (
+                                <span className="text-muted-foreground text-xs shrink-0">
+                                  ({item.installmentLabel})
+                                </span>
+                              )}
+                              {cat && (
+                                <span
+                                  className="inline-block w-2 h-2 rounded-full shrink-0"
+                                  style={{ backgroundColor: cat.color }}
+                                  title={cat.name}
+                                />
+                              )}
+                            </span>
+                            <span className="text-destructive font-semibold tabular-nums shrink-0">
+                              -{formatCurrency(item.amount)}
+                            </span>
+                          </li>
+                        )
+                      })}
                   </ul>
                 )}
-                {selectedMonth.items.length > 0 && (
+                {selectedMonth.items.filter((i) => i.transactionType === 'expense').length > 0 && (
                   <p className="text-sm font-medium text-destructive mt-2">
                     Total: -{formatCurrency(selectedMonth.totalExpenses)}
                   </p>
                 )}
               </div>
+
+              {/* Entradas pendentes (receitas fixas a receber) */}
+              {selectedMonth.items.some((i) => i.transactionType === 'income') && (
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
+                    <ArrowDownCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+                    Receitas a receber
+                  </h4>
+                  <ul className="space-y-2">
+                    {selectedMonth.items
+                      .filter((item) => item.transactionType === 'income')
+                      .map((item) => {
+                        const cat = categories.find((c) => c.id === item.categoryId)
+                        return (
+                          <li
+                            key={item.id}
+                            className="flex items-center justify-between gap-3 py-2 px-3 rounded-lg bg-muted/40 border border-border/50"
+                          >
+                            <span className="flex items-center gap-2 min-w-0">
+                              <Repeat className="w-4 h-4 text-muted-foreground shrink-0" />
+                              <span className="truncate">{item.name}</span>
+                              {cat && (
+                                <span
+                                  className="inline-block w-2 h-2 rounded-full shrink-0"
+                                  style={{ backgroundColor: cat.color }}
+                                  title={cat.name}
+                                />
+                              )}
+                            </span>
+                            <span className="text-green-600 dark:text-green-400 font-semibold tabular-nums shrink-0">
+                              +{formatCurrency(item.amount)}
+                            </span>
+                          </li>
+                        )
+                      })}
+                  </ul>
+                </div>
+              )}
             </div>
             <div className="p-4 border-t border-border shrink-0">
               <Button variant="outline" className="w-full" onClick={() => setSelectedMonth(null)}>

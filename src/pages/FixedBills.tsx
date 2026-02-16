@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { CurrencyInput } from '@/components/ui/currency-input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
-import { useFixedBills, useSettings } from '@/hooks/useFinanceData'
+import { useFixedBills, useSettings, useTransactions } from '@/hooks/useFinanceData'
 import type { FixedBill } from '../vite-env'
-import { useNavigate } from 'react-router-dom'
-import { Plus, Pencil, Trash2, Repeat, Receipt } from 'lucide-react'
+import { Plus, Pencil, Trash2, Repeat } from 'lucide-react'
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', {
@@ -19,14 +19,15 @@ function formatCurrency(value: number) {
 const DUE_DAYS = Array.from({ length: 31 }, (_, i) => i + 1)
 
 export default function FixedBills() {
-  const navigate = useNavigate()
   const { fixedBills, loading, error, addFixedBill, updateFixedBill, deleteFixedBill } = useFixedBills()
   const { settings } = useSettings()
+  const { addTransaction } = useTransactions()
   const categories = settings?.categories ?? []
   const tags = settings?.tags ?? []
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editingBill, setEditingBill] = useState<FixedBill | null>(null)
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [form, setForm] = useState<Omit<FixedBill, 'id'>>({
     name: '',
     amount: 0,
@@ -91,6 +92,30 @@ export default function FixedBills() {
   const handleDelete = async (id: string) => {
     if (window.confirm('Excluir esta conta fixa?')) {
       await deleteFixedBill(id)
+    }
+  }
+
+  const handleConfirmPayment = async (bill: FixedBill) => {
+    if (confirmingId) return
+    setConfirmingId(bill.id)
+    try {
+      const now = new Date()
+      const y = now.getFullYear()
+      const m = now.getMonth() + 1
+      const monthKey = `${y}-${String(m).padStart(2, '0')}`
+      const lastDay = new Date(y, m, 0).getDate()
+      const day = Math.min(bill.dueDay, lastDay)
+      const date = `${monthKey}-${String(day).padStart(2, '0')}`
+      await addTransaction({
+        date,
+        description: bill.name,
+        amount: bill.amount,
+        type: bill.type,
+        categoryId: bill.categoryId,
+        tagIds: bill.tagIds ?? [],
+      })
+    } finally {
+      setConfirmingId(null)
     }
   }
 
@@ -200,31 +225,19 @@ export default function FixedBills() {
                             <Button
                               type="button"
                               size="sm"
-                              variant="ghost"
-                              title="Registrar como transação (mês atual)"
-                              onClick={() =>
-                                navigate('/transactions', {
-                                  state: {
-                                    openNewTransaction: true,
-                                    prefillFromFixedBill: {
-                                      description: bill.name,
-                                      amount: bill.amount,
-                                      type: bill.type,
-                                      categoryId: bill.categoryId,
-                                      tagIds: bill.tagIds ?? [],
-                                      dueDay: bill.dueDay
-                                    }
-                                  }
-                                })
-                              }
+                              variant="default"
+                              title="Adiciona esta conta nas transações e no dashboard do mês atual"
+                              onClick={() => handleConfirmPayment(bill)}
+                              disabled={confirmingId === bill.id}
                             >
-                              <Receipt className="w-4 h-4" />
+                              {confirmingId === bill.id ? 'Confirmando...' : 'Confirmar pagamento'}
                             </Button>
                             <Button
                               type="button"
                               size="sm"
                               variant="ghost"
                               onClick={() => openEditModal(bill)}
+                              title="Editar conta fixa"
                             >
                               <Pencil className="w-4 h-4" />
                             </Button>
@@ -304,15 +317,9 @@ export default function FixedBills() {
               </div>
               <div>
                 <Label>Valor (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.amount || ''}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, amount: parseFloat(e.target.value) || 0 }))
-                  }
-                  placeholder="0,00"
+                <CurrencyInput
+                  value={form.amount}
+                  onChange={(amount) => setForm((f) => ({ ...f, amount }))}
                   className="mt-1"
                   required
                 />

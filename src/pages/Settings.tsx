@@ -108,6 +108,19 @@ export default function Settings() {
   const [addingCategory, setAddingCategory] = useState(false)
   const [editingTag, setEditingTag] = useState<Partial<Tag> | null>(null)
   const [addingTag, setAddingTag] = useState(false)
+  const [currentVersion, setCurrentVersion] = useState<string>('')
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
+  const [updateResult, setUpdateResult] = useState<CheckForUpdateResult | null>(null)
+  const [dataFolderPath, setDataFolderPath] = useState<string>('')
+  const [resetting, setResetting] = useState(false)
+
+  useEffect(() => {
+    window.electronAPI?.getVersion().then(setCurrentVersion).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    window.electronAPI?.getDataFolderPath().then(setDataFolderPath).catch(() => {})
+  }, [])
 
   if (loading || !settings) {
     return (
@@ -158,20 +171,6 @@ export default function Settings() {
   const handlePreferencesChange = (updates: Partial<Pick<AppSettings, 'theme'>>) => {
     save({ ...settings, ...updates })
   }
-
-  const [currentVersion, setCurrentVersion] = useState<string>('')
-  const [checkingUpdate, setCheckingUpdate] = useState(false)
-  const [updateResult, setUpdateResult] = useState<CheckForUpdateResult | null>(null)
-  const [dataFolderPath, setDataFolderPath] = useState<string>('')
-  const [resetting, setResetting] = useState(false)
-
-  useEffect(() => {
-    window.electronAPI?.getVersion().then(setCurrentVersion).catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    window.electronAPI?.getDataFolderPath().then(setDataFolderPath).catch(() => {})
-  }, [])
 
   const handleCheckUpdate = () => {
     setCheckingUpdate(true)

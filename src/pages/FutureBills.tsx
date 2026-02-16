@@ -2,9 +2,10 @@ import { useMemo, useState, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { CurrencyInput } from '@/components/ui/currency-input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
-import { useFixedBills, useInstallmentDebts, useSettings, useFutureBillsPaid, useTransactions } from '@/hooks/useFinanceData'
+import { useInstallmentDebts, useSettings, useFutureBillsPaid, useTransactions } from '@/hooks/useFinanceData'
 import type { FixedBill, InstallmentDebt } from '../vite-env'
 import { Plus, CalendarClock, Trash2, CreditCard, Repeat, ChevronRight, Check } from 'lucide-react'
 
@@ -42,6 +43,7 @@ function addMonths(ym: string, n: number): string {
 export interface FutureBillItem {
   id: string
   type: 'fixed' | 'installment'
+  transactionType: 'income' | 'expense'
   monthKey: string
   dueDay: number
   dateLabel: string
@@ -64,7 +66,7 @@ export function buildFutureItems(
 
   const items: FutureBillItem[] = []
 
-  for (const bill of fixedBills.filter((b) => b.active && b.type !== 'income')) {
+  for (const bill of fixedBills.filter((b) => b.active)) {
     for (let i = 0; i < monthsAhead; i++) {
       const monthKey = addMonths(startKey, i)
       const lastDay = new Date(parseInt(monthKey.slice(0, 4), 10), parseInt(monthKey.slice(5, 7), 10), 0).getDate()
@@ -72,6 +74,7 @@ export function buildFutureItems(
       items.push({
         id: `fixed-${bill.id}-${monthKey}`,
         type: 'fixed',
+        transactionType: bill.type,
         monthKey,
         dueDay: safeDay,
         dateLabel: `${String(safeDay).padStart(2, '0')}/${monthKey.slice(5, 7)}/${monthKey.slice(0, 4)}`,
@@ -93,6 +96,7 @@ export function buildFutureItems(
       items.push({
         id: `installment-${debt.id}-${i}`,
         type: 'installment',
+        transactionType: 'expense',
         monthKey,
         dueDay: safeDay,
         dateLabel: `${String(safeDay).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`,
@@ -138,7 +142,7 @@ function buildGroups(
     }
   }
 
-  for (const bill of fixedBills.filter((b) => b.active && b.type !== 'income')) {
+  for (const bill of fixedBills.filter((b) => b.active)) {
     const list = byFixed.get(bill.id) ?? []
     if (list.length) groups.push({ type: 'fixed', source: bill, items: list })
   }
@@ -157,7 +161,6 @@ function buildGroups(
 const DUE_DAYS = Array.from({ length: 31 }, (_, i) => i + 1)
 
 export default function FutureBills() {
-  const { fixedBills, loading: loadingFixed } = useFixedBills()
   const { installmentDebts, loading: loadingDebts, addInstallmentDebt, deleteInstallmentDebt } = useInstallmentDebts()
   const { settings } = useSettings()
   const { paidIds, togglePaid } = useFutureBillsPaid()
@@ -168,6 +171,7 @@ export default function FutureBills() {
   const [detailGroup, setDetailGroup] = useState<FutureBillGroup | null>(null)
   const [paidDetailGroup, setPaidDetailGroup] = useState<FutureBillGroup | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
+  const [processingIds, setProcessingIds] = useState<Set<string>>(new Set())
   const [form, setForm] = useState<Omit<InstallmentDebt, 'id'>>({
     name: '',
     totalAmount: 0,
@@ -185,8 +189,8 @@ export default function FutureBills() {
   }, [categories])
 
   const groups = useMemo(
-    () => buildGroups(fixedBills, installmentDebts, 12),
-    [fixedBills, installmentDebts]
+    () => buildGroups([], installmentDebts, 12),
+    [installmentDebts]
   )
 
   const fullyPaidGroups = useMemo(
@@ -253,28 +257,38 @@ export default function FutureBills() {
   }
 
   const handleMarkAsPaid = async (item: FutureBillItem) => {
+    if (processingIds.has(item.id)) return
     const isPaid = paidIds.includes(item.id)
-    if (!isPaid) {
-      const [y, m] = item.monthKey.split('-').map(Number)
-      const lastDay = new Date(y, m, 0).getDate()
-      const day = Math.min(item.dueDay, lastDay)
-      const date = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-      const description = item.installmentLabel
-        ? `${item.name} (${item.installmentLabel})`
-        : item.name
-      await addTransaction({
-        date,
-        description,
-        amount: item.amount,
-        type: 'expense',
-        categoryId: item.categoryId,
-        tagIds: []
+    setProcessingIds((prev) => new Set(prev).add(item.id))
+    try {
+      if (!isPaid) {
+        const [y, m] = item.monthKey.split('-').map(Number)
+        const lastDay = new Date(y, m, 0).getDate()
+        const day = Math.min(item.dueDay, lastDay)
+        const date = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+        const description = item.installmentLabel
+          ? `${item.name} (${item.installmentLabel})`
+          : item.name
+        await addTransaction({
+          date,
+          description,
+          amount: item.amount,
+          type: item.transactionType,
+          categoryId: item.categoryId,
+          tagIds: []
+        })
+      }
+      await togglePaid(item.id)
+    } finally {
+      setProcessingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(item.id)
+        return next
       })
     }
-    await togglePaid(item.id)
   }
 
-  const loading = loadingFixed || loadingDebts
+  const loading = loadingDebts
 
   if (loading) {
     return (
@@ -305,7 +319,7 @@ export default function FutureBills() {
             <CalendarClock className="w-12 h-12 mb-4 opacity-50" />
             <p>Nenhuma conta futura prevista.</p>
             <p className="text-sm mt-1">
-              Cadastre contas fixas em &quot;Contas fixas&quot; ou lance uma dívida parcelada acima.
+              Lance uma dívida parcelada acima para ver as parcelas aqui.
             </p>
             <Button variant="outline" className="mt-4" onClick={() => { setFormError(null); setModalAddOpen(true) }}>
               Lançar dívida parcelada
@@ -330,7 +344,7 @@ export default function FutureBills() {
                 const paidCount = group.items.filter((i) => paidIds.includes(i.id)).length
                 const subtitle =
                   group.type === 'fixed'
-                    ? `Conta fixa · Dia ${group.source.dueDay} · ${group.items.length} meses`
+                    ? `${group.source.type === 'income' ? 'Receita' : 'Despesa'} fixa · Dia ${group.source.dueDay} · ${group.items.length} meses`
                     : `Parcelado · ${group.items.length} parcelas de ${formatCurrency(firstItem.amount)}`
                 return (
                   <li key={group.type + '-' + group.source.id}>
@@ -363,15 +377,22 @@ export default function FutureBills() {
                         </p>
                       </div>
                       <div className="shrink-0 flex items-center gap-3">
-                        <span className="text-destructive font-medium">
-                          -{formatCurrency(group.type === 'fixed' ? group.source.amount : firstItem.amount)}
+                        <span
+                          className={
+                            group.source.type === 'income'
+                              ? 'text-green-600 font-medium'
+                              : 'text-destructive font-medium'
+                          }
+                        >
+                          {group.source.type === 'income' ? '+' : '-'}
+                          {formatCurrency(group.type === 'fixed' ? group.source.amount : firstItem.amount)}
                           {group.type === 'installment' && (
                             <span className="text-muted-foreground font-normal text-sm">/parcela</span>
                           )}
                         </span>
-                        {paidCount > 0 && (
+                          {paidCount > 0 && (
                           <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                            {paidCount}/{group.items.length} pagas
+                            {paidCount}/{group.items.length} {group.source.type === 'income' ? 'recebidas' : 'pagas'}
                           </span>
                         )}
                         <ChevronRight className="w-4 h-4 text-muted-foreground" />
@@ -473,9 +494,10 @@ export default function FutureBills() {
                       </>
                     )}
                     {paidDetailGroup.type === 'fixed'
-                      ? `${paidDetailGroup.items.length} meses pagos`
+                      ? `${paidDetailGroup.items.length} meses ${paidDetailGroup.source.type === 'income' ? 'recebidos' : 'pagos'}`
                       : `${paidDetailGroup.items.length} parcelas pagas`
-                    } · Total {formatCurrency(totalPaid)}
+                    } · Total {paidDetailGroup.source.type === 'income' ? '+' : '-'}
+                    {formatCurrency(totalPaid)}
                   </p>
                 )
               })()}
@@ -499,8 +521,13 @@ export default function FutureBills() {
                       </p>
                       <p className="text-xs text-muted-foreground">Venc. {item.dateLabel}</p>
                     </div>
-                    <span className="font-semibold tabular-nums text-destructive">
-                      -{formatCurrency(item.amount)}
+                    <span
+                      className={`font-semibold tabular-nums ${
+                        item.transactionType === 'income' ? 'text-green-600' : 'text-destructive'
+                      }`}
+                    >
+                      {item.transactionType === 'income' ? '+' : '-'}
+                      {formatCurrency(item.amount)}
                     </span>
                   </li>
                 ))}
@@ -565,7 +592,9 @@ export default function FutureBills() {
               </div>
             </div>
             <div className="p-4 overflow-y-auto flex-1">
-              <p className="text-sm font-medium text-muted-foreground mb-3">Marcar como paga por mês</p>
+              <p className="text-sm font-medium text-muted-foreground mb-3">
+                {detailGroup.source.type === 'income' ? 'Marcar como recebida por mês' : 'Marcar como paga por mês'}
+              </p>
               <ul className="space-y-2">
                 {detailGroup.items.map((item) => {
                   const isPaid = paidIds.includes(item.id)
@@ -588,14 +617,21 @@ export default function FutureBills() {
                       <button
                         type="button"
                         onClick={() => handleMarkAsPaid(item)}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors shrink-0 ${
+                        disabled={processingIds.has(item.id)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors shrink-0 disabled:opacity-50 ${
                           isPaid
                             ? 'bg-primary text-primary-foreground'
                             : 'bg-muted text-muted-foreground hover:bg-muted/80'
                         }`}
                       >
                         {isPaid ? <Check className="w-4 h-4" /> : null}
-                        {isPaid ? 'Paga' : 'Marcar como paga'}
+                        {isPaid
+                          ? item.transactionType === 'income'
+                            ? 'Recebida'
+                            : 'Paga'
+                          : item.transactionType === 'income'
+                            ? 'Marcar como recebida'
+                            : 'Marcar como paga'}
                       </button>
                     </li>
                   )
@@ -643,15 +679,9 @@ export default function FutureBills() {
               </div>
               <div>
                 <Label>Valor total (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={form.totalAmount || ''}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, totalAmount: parseFloat(e.target.value) || 0 }))
-                  }
-                  placeholder="0,00"
+                <CurrencyInput
+                  value={form.totalAmount}
+                  onChange={(totalAmount) => setForm((f) => ({ ...f, totalAmount }))}
                   className="mt-1"
                   required
                 />

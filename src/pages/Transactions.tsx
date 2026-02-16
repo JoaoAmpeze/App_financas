@@ -13,6 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { CurrencyInput } from '@/components/ui/currency-input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { useTransactions, useTransactionMonths, useSettings } from '@/hooks/useFinanceData'
@@ -612,15 +613,9 @@ export default function Transactions() {
               </div>
               <div>
                 <Label>Valor (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.amount || ''}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, amount: parseFloat(e.target.value) || 0 }))
-                  }
-                  placeholder="0,00"
+                <CurrencyInput
+                  value={form.amount}
+                  onChange={(amount) => setForm((f) => ({ ...f, amount }))}
                   className="mt-1"
                   required
                 />

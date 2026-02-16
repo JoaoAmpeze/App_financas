@@ -4,7 +4,6 @@ import {
   useTransactions,
   useTransactionMonths,
   useSettings,
-  useFixedBills,
   useInstallmentDebts,
 } from '@/hooks/useFinanceData'
 import type { InstallmentDebt } from '@/vite-env'
@@ -123,7 +122,6 @@ export default function Dashboard() {
   const { transactions, loading, error } = useTransactions()
   const { months: monthKeys } = useTransactionMonths()
   const { settings } = useSettings()
-  const { fixedBills } = useFixedBills()
   const { installmentDebts } = useInstallmentDebts()
 
   const now = new Date()
@@ -148,10 +146,9 @@ export default function Dashboard() {
     return Array.from(set).sort().reverse()
   }, [monthKeys, historyEndKey])
 
-  /** Itens detalhados de receita/despesa do mês para os modais */
+  /** Itens detalhados de receita/despesa do mês para os modais (apenas transações e parcelas; contas fixas só entram ao confirmar pagamento) */
   const { monthIncomeDetails, monthExpenseDetails } = useMemo(() => {
     const categories = settings?.categories ?? []
-    const activeFixed = fixedBills.filter((b) => b.active)
     const installmentCurrent = getInstallmentAmountForMonth(installmentDebts, currentMonthKey)
 
     const incomeDetails: { id: string; date: string; description: string; categoryName: string; amount: number; source: 'transaction' | 'fixed' }[] = []
@@ -167,17 +164,6 @@ export default function Dashboard() {
         source: 'transaction',
       })
     }
-    for (const b of activeFixed.filter((b) => b.type === 'income')) {
-      const cat = categories.find((c) => c.id === b.categoryId)
-      incomeDetails.push({
-        id: `fixed-${b.id}`,
-        date: `${currentMonthKey}-${String(b.dueDay).padStart(2, '0')}`,
-        description: b.name,
-        categoryName: cat?.name ?? b.categoryId,
-        amount: b.amount,
-        source: 'fixed',
-      })
-    }
     incomeDetails.sort((a, b) => a.date.localeCompare(b.date))
 
     const expenseDetails: { id: string; date: string; description: string; categoryName: string; amount: number; source: 'transaction' | 'fixed' | 'installment' }[] = []
@@ -191,17 +177,6 @@ export default function Dashboard() {
         categoryName: cat?.name ?? t.categoryId,
         amount: t.amount,
         source: 'transaction',
-      })
-    }
-    for (const b of activeFixed.filter((b) => b.type === 'expense')) {
-      const cat = categories.find((c) => c.id === b.categoryId)
-      expenseDetails.push({
-        id: `fixed-${b.id}`,
-        date: `${currentMonthKey}-${String(b.dueDay).padStart(2, '0')}`,
-        description: b.name,
-        categoryName: cat?.name ?? b.categoryId,
-        amount: b.amount,
-        source: 'fixed',
       })
     }
     for (const debt of installmentDebts) {
@@ -224,7 +199,7 @@ export default function Dashboard() {
     expenseDetails.sort((a, b) => a.date.localeCompare(b.date))
 
     return { monthIncomeDetails: incomeDetails, monthExpenseDetails: expenseDetails }
-  }, [transactions, settings?.categories, currentMonthKey, fixedBills, installmentDebts])
+  }, [transactions, settings?.categories, currentMonthKey, installmentDebts])
 
   const {
     balanceReal,
@@ -237,14 +212,6 @@ export default function Dashboard() {
     trendPercent,
     savingsRate,
   } = useMemo(() => {
-    const activeFixed = fixedBills.filter((b) => b.active)
-    const fixedIncomePerMonth = activeFixed
-      .filter((b) => b.type === 'income')
-      .reduce((s, b) => s + b.amount, 0)
-    const fixedExpensePerMonth = activeFixed
-      .filter((b) => b.type === 'expense')
-      .reduce((s, b) => s + b.amount, 0)
-
     const installmentCurrent = getInstallmentAmountForMonth(installmentDebts, currentMonthKey)
 
     let income = 0
@@ -265,12 +232,7 @@ export default function Dashboard() {
         byCategory[t.categoryId] = (byCategory[t.categoryId] ?? 0) + t.amount
       }
     }
-    monthIn += fixedIncomePerMonth
-    monthOut += fixedExpensePerMonth
     monthOut += installmentCurrent.total
-    for (const b of activeFixed.filter((x) => x.type === 'expense')) {
-      byCategory[b.categoryId] = (byCategory[b.categoryId] ?? 0) + b.amount
-    }
     for (const [catId, val] of Object.entries(installmentCurrent.byCategory)) {
       byCategory[catId] = (byCategory[catId] ?? 0) + val
     }
@@ -292,8 +254,6 @@ export default function Dashboard() {
         if (t.type === 'income') receita += t.amount
         else despesa += t.amount
       }
-      receita += fixedIncomePerMonth
-      despesa += fixedExpensePerMonth
       const inst = getInstallmentAmountForMonth(installmentDebts, monthKey)
       despesa += inst.total
       const [, m] = monthKey.split('-')
@@ -312,8 +272,8 @@ export default function Dashboard() {
     })
 
     const balanceReal = income - expense
-    const balanceProjetado = balanceReal + fixedIncomePerMonth - fixedExpensePerMonth - installmentCurrent.total
-    const monthChangeTransactionsOnly = (monthIn - fixedIncomePerMonth - installmentCurrent.total) - (monthOut - fixedExpensePerMonth - installmentCurrent.total)
+    const balanceProjetado = balanceReal - installmentCurrent.total
+    const monthChangeTransactionsOnly = monthIn - (monthOut - installmentCurrent.total)
     const startOfMonthBalance = balanceReal - monthChangeTransactionsOnly
     const trendPercent =
       startOfMonthBalance !== 0
@@ -336,7 +296,7 @@ export default function Dashboard() {
       trendPercent,
       savingsRate,
     }
-  }, [transactions, settings?.categories, currentMonthKey, historyEndKey, now, fixedBills, installmentDebts])
+  }, [transactions, settings?.categories, currentMonthKey, historyEndKey, now, installmentDebts])
 
   const handlePieClick = (categoryId: string | null) => {
     if (categoryId) navigate(`/transactions?categoryId=${categoryId}`)
@@ -409,7 +369,7 @@ export default function Dashboard() {
                 {formatCurrency(balanceProjetado)}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Inclui transações + contas fixas + parcelas do mês
+                Inclui transações + parcelas do mês (contas fixas só após confirmar pagamento)
               </p>
               <p className="text-sm text-muted-foreground mt-2">
                 Saldo atual (só transações): {formatCurrency(balanceReal)}
@@ -475,7 +435,7 @@ export default function Dashboard() {
           onClick={() => setDetailModal('receitas')}
           className="rounded-2xl border border-border bg-card p-5 text-left hover:bg-accent/50 transition-colors cursor-pointer"
         >
-          <p className="text-sm font-medium text-muted-foreground">Receita ({currentMonthLabel}){fixedBills.some(b => b.active && b.type === 'income') ? ' · incl. contas fixas' : ''}</p>
+          <p className="text-sm font-medium text-muted-foreground">Receita ({currentMonthLabel})</p>
           <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
             {formatCurrency(monthIncome)}
           </p>
@@ -494,7 +454,7 @@ export default function Dashboard() {
           onClick={() => setDetailModal('despesas')}
           className="rounded-2xl border border-border bg-card p-5 text-left hover:bg-accent/50 transition-colors cursor-pointer"
         >
-          <p className="text-sm font-medium text-muted-foreground">Despesas ({currentMonthLabel}){(fixedBills.some(b => b.active && b.type === 'expense') || installmentDebts.length > 0) ? ' · incl. contas fixas e parcelas' : ''}</p>
+          <p className="text-sm font-medium text-muted-foreground">Despesas ({currentMonthLabel}){installmentDebts.length > 0 ? ' · incl. parcelas' : ''}</p>
           <p className="text-2xl font-bold text-destructive mt-1">
             {formatCurrency(monthExpense)}
           </p>

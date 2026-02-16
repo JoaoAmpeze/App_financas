@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { CurrencyInput } from '@/components/ui/currency-input'
 import { Label } from '@/components/ui/label'
 import { useGoals, useSettings } from '@/hooks/useFinanceData'
 import type { Goal } from '../vite-env'
@@ -36,7 +37,7 @@ export default function Goals() {
   const { settings } = useSettings()
   const [modalOpen, setModalOpen] = useState(false)
   const [depositGoalId, setDepositGoalId] = useState<string | null>(null)
-  const [depositAmount, setDepositAmount] = useState('')
+  const [depositAmount, setDepositAmount] = useState(0)
   const [form, setForm] = useState<Omit<Goal, 'id' | 'depositHistory'>>({
     name: '',
     targetAmount: 0,
@@ -68,13 +69,13 @@ export default function Goals() {
   }
 
   const handleDeposit = async () => {
-    if (!depositGoalId || !depositAmount || Number(depositAmount) <= 0) return
-    await depositToGoal(depositGoalId, Number(depositAmount), {
+    if (!depositGoalId || !depositAmount || depositAmount <= 0) return
+    await depositToGoal(depositGoalId, depositAmount, {
       createExpenseTransaction: true,
       expenseCategoryId: investmentCategoryId
     })
     setDepositGoalId(null)
-    setDepositAmount('')
+    setDepositAmount(0)
   }
 
   const handleMarkAsPaid = async (goal: Goal) => {
@@ -171,7 +172,7 @@ export default function Goals() {
                         size="sm"
                         variant="outline"
                         className="w-full"
-                        onClick={() => { setDepositGoalId(goal.id); setDepositAmount('') }}
+                        onClick={() => { setDepositGoalId(goal.id); setDepositAmount(0) }}
                       >
                         <PiggyBank className="w-4 h-4 mr-2" />
                         Depositar
@@ -225,30 +226,18 @@ export default function Goals() {
               </div>
               <div>
                 <Label>Valor alvo (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.targetAmount || ''}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, targetAmount: parseFloat(e.target.value) || 0 }))
-                  }
-                  placeholder="0,00"
+                <CurrencyInput
+                  value={form.targetAmount}
+                  onChange={(targetAmount) => setForm((f) => ({ ...f, targetAmount }))}
                   className="mt-1"
                   required
                 />
               </div>
               <div>
                 <Label>Valor atual (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.currentAmount || ''}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, currentAmount: parseFloat(e.target.value) || 0 }))
-                  }
-                  placeholder="0,00"
+                <CurrencyInput
+                  value={form.currentAmount}
+                  onChange={(currentAmount) => setForm((f) => ({ ...f, currentAmount }))}
                   className="mt-1"
                 />
               </div>
@@ -285,13 +274,9 @@ export default function Goals() {
             <div className="space-y-4">
               <div>
                 <Label>Valor (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
+                <CurrencyInput
                   value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
-                  placeholder="0,00"
+                  onChange={setDepositAmount}
                   className="mt-1"
                 />
               </div>
@@ -302,7 +287,7 @@ export default function Goals() {
                 <Button type="button" variant="outline" onClick={() => setDepositGoalId(null)}>
                   Cancelar
                 </Button>
-                <Button onClick={handleDeposit} disabled={!depositAmount || Number(depositAmount) <= 0}>
+                <Button onClick={handleDeposit} disabled={!depositAmount || depositAmount <= 0}>
                   Depositar
                 </Button>
               </div>
