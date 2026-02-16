@@ -1,6 +1,6 @@
 {
   "name": "app-financas",
-  "version": "3.0.5",
+  "version": "3.0.6",
   "description": "Desktop Financial App - local only",
   "author": "",
   "main": "dist/main/index.js",
@@ -8,22 +8,23 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "make": "npm run build && electron-builder --win",
+    "make": "npm run generate-icon && npm run build && electron-builder --win",
     "sync-version": "node scripts/sync-version.js",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "generate-icon": "node scripts/generate-icon.js"
   },
   "dependencies": {
     "@tanstack/react-table": "^8.20.5",
     "chart.js": "^4.5.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
+    "electron-updater": "^6.3.9",
     "lucide-react": "^0.460.0",
     "react": "^18.3.1",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0",
-    "tailwind-merge": "^2.5.4",
-    "electron-updater": "^6.3.9"
+    "tailwind-merge": "^2.5.4"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
@@ -35,7 +36,9 @@
     "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
     "postcss": "^8.4.47",
+    "sharp": "^0.33.5",
     "tailwindcss": "^3.4.14",
+    "to-ico": "^1.1.5",
     "typescript": "^5.6.3",
     "vite": "^5.4.10"
   },
@@ -59,16 +62,20 @@
         }
       ],
       "artifactName": "App-Financas-${version}-Setup.${ext}",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
     },
     "publish": {
       "provider": "github",
       "owner": "JoaoAmpeze",
       "repo": "App_financas"
-    }
+    },
+    "icon": "build/icon.ico"
   }
 }

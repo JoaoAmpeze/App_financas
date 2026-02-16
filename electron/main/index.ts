@@ -1,8 +1,14 @@
 import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron'
 import { join } from 'path'
+import { existsSync } from 'fs'
 import { autoUpdater } from 'electron-updater'
 import { DataManager } from './services/DataManager'
 import { migrateIfNeeded } from './services/migrateToDataManager'
+
+// Redireciona cache para userData (evita "Acesso negado" no Windows)
+app.setPath('cache', join(app.getPath('userData'), 'Cache'))
+// Evita erros de GPU cache no Windows quando o disco não tem permissão
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
 
 // Só baixamos quando o usuário clicar em atualizar
 autoUpdater.autoDownload = false
@@ -19,10 +25,12 @@ function getDataPath(): string {
 }
 
 function createWindow(): void {
+  const iconPath = join(app.getAppPath(), 'build', 'icon.ico')
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     focusable: true,
+    ...(existsSync(iconPath) && process.platform === 'win32' ? { icon: iconPath } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,

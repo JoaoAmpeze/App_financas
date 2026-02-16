@@ -10,6 +10,7 @@ import {
   CalendarRange,
   Search,
   ChevronDown,
+  Wallet,
 } from 'lucide-react'
 import type { CheckForUpdateResult } from '@/vite-env'
 import Dashboard from '@/pages/Dashboard'
@@ -112,8 +113,8 @@ function AppLayoutContent({
         <aside className="w-[240px] flex flex-col bg-card border-r border-border rounded-r-2xl shrink-0">
           <div className="p-5">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground font-bold text-lg shadow-lg">
-                F
+              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground shadow-lg">
+                <Wallet className="w-6 h-6" />
               </div>
               <span className="font-semibold text-card-foreground">App Finanças</span>
             </div>
