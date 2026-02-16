@@ -1,30 +1,18 @@
 import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron'
 import { join } from 'path'
+import { autoUpdater } from 'electron-updater'
 import { DataManager } from './services/DataManager'
 import { migrateIfNeeded } from './services/migrateToDataManager'
 
-const VERSION_CHECK_URL = 'https://raw.githubusercontent.com/JoaoAmpeze/App_financas/main/version.json'
+// Só baixamos quando o usuário clicar em atualizar
+autoUpdater.autoDownload = false
+autoUpdater.autoInstallOnAppQuit = true
 
 // Se os campos de digitação ainda não funcionarem no Windows após o build, descomente a linha abaixo:
 // app.disableHardwareAcceleration()
 
 let mainWindow: BrowserWindow | null = null
 let dataManager: DataManager
-
-function parseVersion(v: string): number[] {
-  const parts = v.replace(/^v/, '').split('.').map(Number)
-  return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0]
-}
-
-function isVersionLessThan(current: string, latest: string): boolean {
-  const a = parseVersion(current)
-  const b = parseVersion(latest)
-  for (let i = 0; i < 3; i++) {
-    if (a[i] < b[i]) return true
-    if (a[i] > b[i]) return false
-  }
-  return false
-}
 
 function getDataPath(): string {
   return join(app.getPath('userData'), 'finance-data')
@@ -94,19 +82,38 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('app:checkForUpdate', async () => {
-    if (!VERSION_CHECK_URL) return { updateRequired: false }
     try {
-      const res = await fetch(VERSION_CHECK_URL)
-      if (!res.ok) return { updateRequired: false }
-      const data = (await res.json()) as { latestVersion?: string; downloadUrl?: string }
-      const latest = data?.latestVersion
-      if (!latest || typeof latest !== 'string') return { updateRequired: false }
+      const result = await autoUpdater.checkForUpdate()
+      if (!result?.updateInfo?.version) return { updateRequired: false }
+      const latestVersion = result.updateInfo.version
       const current = app.getVersion()
-      if (!isVersionLessThan(current, latest)) return { updateRequired: false }
-      return { updateRequired: true, latestVersion: latest, downloadUrl: typeof data.downloadUrl === 'string' ? data.downloadUrl : undefined }
+      // Comparação semântica: só exige atualização se a release for mais nova
+      const [cMaj, cMin, cPatch] = current.replace(/^v/, '').split('.').map(Number)
+      const [lMaj, lMin, lPatch] = latestVersion.replace(/^v/, '').split('.').map(Number)
+      const needUpdate = lMaj > cMaj || (lMaj === cMaj && lMin > cMin) || (lMaj === cMaj && lMin === cMin && lPatch > cPatch)
+      if (!needUpdate) return { updateRequired: false }
+      const downloadUrl = result.updateInfo.files?.find((f: { url?: string }) => f.url)?.url ?? result.updateInfo.releaseUrl
+      return { updateRequired: true, latestVersion, downloadUrl }
     } catch {
       return { updateRequired: false }
     }
+  })
+
+  ipcMain.handle('app:downloadAndInstallUpdate', () => {
+    return new Promise<void>((resolve, reject) => {
+      const onDownloaded = () => {
+        autoUpdater.removeListener('error', onError)
+        autoUpdater.quitAndInstall(false, true)
+        resolve()
+      }
+      const onError = (err: Error) => {
+        autoUpdater.removeListener('update-downloaded', onDownloaded)
+        reject(err)
+      }
+      autoUpdater.once('update-downloaded', onDownloaded)
+      autoUpdater.once('error', onError)
+      autoUpdater.downloadUpdate().catch(reject)
+    })
   })
 
   ipcMain.handle('data:getSettings', () => dataManager.getSettings())

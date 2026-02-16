@@ -113,6 +113,8 @@ export default function Settings() {
   const [updateResult, setUpdateResult] = useState<CheckForUpdateResult | null>(null)
   const [dataFolderPath, setDataFolderPath] = useState<string>('')
   const [resetting, setResetting] = useState(false)
+  const [downloadingUpdate, setDownloadingUpdate] = useState(false)
+  const [updateError, setUpdateError] = useState<string | null>(null)
 
   useEffect(() => {
     window.electronAPI?.getVersion().then(setCurrentVersion).catch(() => {})
@@ -185,9 +187,14 @@ export default function Settings() {
   }
 
   const handleDownloadUpdate = () => {
-    if (updateResult?.downloadUrl) {
-      window.electronAPI?.openExternalUrl(updateResult.downloadUrl)
-    }
+    if (!updateResult?.updateRequired || !window.electronAPI?.downloadAndInstallUpdate) return
+    setUpdateError(null)
+    setDownloadingUpdate(true)
+    window.electronAPI.downloadAndInstallUpdate()
+      .catch((err: unknown) => {
+        setDownloadingUpdate(false)
+        setUpdateError(err instanceof Error ? err.message : 'Erro ao baixar atualização.')
+      })
   }
 
   const handleOpenDataFolder = () => {
@@ -243,9 +250,25 @@ export default function Settings() {
                   <p className="text-sm font-medium text-foreground">
                     Nova versão disponível: v{updateResult.latestVersion}
                   </p>
-                  <Button size="sm" onClick={handleDownloadUpdate}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Baixar atualização
+                  {updateError && (
+                    <p className="text-sm text-destructive">{updateError}</p>
+                  )}
+                  <Button
+                    size="sm"
+                    onClick={handleDownloadUpdate}
+                    disabled={downloadingUpdate}
+                  >
+                    {downloadingUpdate ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Baixando… O app será reiniciado em instantes.
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4 mr-2" />
+                        Baixar e instalar atualização
+                      </>
+                    )}
                   </Button>
                 </>
               ) : (

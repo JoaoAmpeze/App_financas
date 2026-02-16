@@ -83,6 +83,7 @@ declare global {
       getDataFolderPath: () => Promise<string>
       openDataFolder: () => Promise<void>
       checkForUpdate: () => Promise<CheckForUpdateResult>
+      downloadAndInstallUpdate: () => Promise<void>
       resetAllData: () => Promise<void>
       getSettings: () => Promise<AppSettings>
       saveSettings: (data: AppSettings) => Promise<void>

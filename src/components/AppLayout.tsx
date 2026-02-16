@@ -34,15 +34,24 @@ const PAGE_TITLES: Record<string, string> = {
 
 function UpdateRequiredScreen({
   latestVersion,
-  downloadUrl,
 }: {
   latestVersion: string
   downloadUrl?: string
 }) {
-  const handleDownload = () => {
-    if (downloadUrl) {
-      window.electronAPI?.openExternalUrl(downloadUrl)
+  const [downloading, setDownloading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleDownloadAndInstall = () => {
+    if (!window.electronAPI?.downloadAndInstallUpdate) {
+      setError('Atualização automática não disponível.')
+      return
     }
+    setError(null)
+    setDownloading(true)
+    window.electronAPI.downloadAndInstallUpdate().catch((err: unknown) => {
+      setDownloading(false)
+      setError(err instanceof Error ? err.message : 'Erro ao baixar.')
+    })
   }
 
   return (
@@ -52,18 +61,15 @@ function UpdateRequiredScreen({
         <p className="text-muted-foreground">
           Uma nova versão está disponível. Instale a versão <strong className="text-foreground">v{latestVersion}</strong> para continuar.
         </p>
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <button
           type="button"
-          onClick={handleDownload}
-          className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          onClick={handleDownloadAndInstall}
+          disabled={downloading}
+          className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-70"
         >
-          {downloadUrl ? `Baixar v${latestVersion}` : 'Verificar atualização'}
+          {downloading ? 'Baixando… O app será reiniciado em instantes.' : `Baixar e instalar v${latestVersion}`}
         </button>
-        {!downloadUrl && (
-          <p className="text-xs text-muted-foreground">
-            O download abrirá no navegador. Se não abrir, verifique o repositório do projeto.
-          </p>
-        )}
       </div>
     </div>
   )

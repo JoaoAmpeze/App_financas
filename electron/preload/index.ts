@@ -81,6 +81,7 @@ const api = {
   getDataFolderPath: () => ipcRenderer.invoke('app:getDataFolderPath') as Promise<string>,
   openDataFolder: () => ipcRenderer.invoke('app:openDataFolder') as Promise<void>,
   checkForUpdate: () => ipcRenderer.invoke('app:checkForUpdate') as Promise<CheckForUpdateResult>,
+  downloadAndInstallUpdate: () => ipcRenderer.invoke('app:downloadAndInstallUpdate') as Promise<void>,
   resetAllData: () => ipcRenderer.invoke('data:resetAllData') as Promise<void>,
 
   getSettings: () => ipcRenderer.invoke('data:getSettings') as Promise<AppSettings>,

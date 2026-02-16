@@ -1,6 +1,6 @@
 {
   "name": "app-financas",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "description": "Desktop Financial App - local only",
   "author": "",
   "main": "dist/main/index.js",
@@ -22,7 +22,8 @@
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0",
-    "tailwind-merge": "^2.5.4"
+    "tailwind-merge": "^2.5.4",
+    "electron-updater": "^6.3.9"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
@@ -63,6 +64,11 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "JoaoAmpeze",
+      "repo": "App_financas"
     }
   }
 }
